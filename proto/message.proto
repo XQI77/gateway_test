@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package gatesvr.proto;
+
+option go_package = "gatesvr/proto";
+
+// 客户端请求消息 (通用信封)
+message ClientRequest {
+  uint32 msg_id = 1;           // 消息ID
+  uint64 seq_id = 2;           // 序列号，用于可靠性保证
+  RequestType type = 3;        // 请求类型
+  bytes payload = 4;           // 消息载荷, 根据type类型解析为不同的消息体
+  map<string, string> headers = 5; // 扩展头部
+  string openid = 6;           // 客户端唯一身份标识
+}
+
+// 服务端推送消息 (通用信封)
+message ServerPush {
+  uint32 msg_id = 1;           // 消息ID
+  uint64 seq_id = 2;           // 序列号
+  PushType type = 3;           // 推送类型
+  bytes payload = 4;           // 消息载荷, 根据type类型解析为不同的消息体
+  map<string, string> headers = 5; // 扩展头部
+}
+
+// 请求类型枚举
+enum RequestType {
+  REQUEST_UNKNOWN = 0;
+  REQUEST_START = 1;           // (新增) 连接建立请求
+  REQUEST_STOP = 2;            // (新增) 连接断开请求
+  REQUEST_HEARTBEAT = 3;       // 心跳请求
+  REQUEST_BUSINESS = 4;        // 业务请求
+  REQUEST_ACK = 5;             // ACK确认
+}
+
+// 推送类型枚举
+enum PushType {
+  PUSH_UNKNOWN = 0;
+  PUSH_START_RESP = 1;         // (新增) 连接建立的响应
+  PUSH_HEARTBEAT_RESP = 2;     // 心跳响应
+  PUSH_BUSINESS_DATA = 3;      // 业务数据推送
+  PUSH_ERROR = 4;              // 错误推送
+}
+
+// (新增) 连接建立请求 (startmsg)
+// 当客户端与gatesvr建立TCP连接后，应立即发送的第一个应用层消息
+message StartRequest {
+  string openid = 1;            // (新增) 客户端的用户唯一标识 (User ID)
+  string auth_token = 2;        // 用于认证的令牌
+  uint64 last_acked_seq_id = 3; // 上次成功确认的消息序列号, 用于重连时消息同步
+}
+
+// (新增) 连接建立响应
+// 服务器对 StartRequest 的响应
+message StartResponse {
+  bool success = 1;             // 是否成功
+  ErrorMessage error = 2;       // 如果失败，返回错误信息
+  int32 heartbeat_interval = 3; // (可选) 服务器建议的心跳间隔（秒）
+  string connection_id = 4;     // 本次连接在服务器端的唯一ID，用于日志追踪
+}
+
+// 客户端在主动关闭连接前，应尽力发送此消息
+message StopRequest {
+  // 断开原因
+  enum Reason {
+    UNKNOWN = 0;
+    USER_LOGOUT = 1;            // 用户主动登出
+    APP_CLOSE = 2;              // 应用关闭
+    SWITCH_ACCOUNT = 3;         // 切换账号
+  }
+  Reason reason = 1;
+}
+
+// 心跳请求载荷
+message HeartbeatRequest {
+  int64 client_timestamp = 1; // 客户端发送时的时间戳
+}
+
+// 心跳响应载荷
+message HeartbeatResponse {
+  int64 client_timestamp = 1; // 从客户端请求中带回的时间戳
+  int64 server_timestamp = 2; // 服务器接收到请求时的时间戳
+}
+
+// 业务请求载荷（示例）
+message BusinessRequest {
+  string action = 1;
+  map<string, string> params = 2;
+  bytes data = 3;
+}
+
+// 业务响应载荷（示例）
+message BusinessResponse {
+  int32 code = 1;
+  string message = 2;
+  bytes data = 3;
+}
+
+// 错误消息载荷
+message ErrorMessage {
+  int32 error_code = 1;
+  string error_message = 2;
+  string detail = 3;
+}
+
+// 客户端ACK消息
+message ClientAck {
+  uint64 acked_seq_id = 1;     // 已确认的序列号
+}

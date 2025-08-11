@@ -1,0 +1,355 @@
+# gatesvr服务集群 Docker Compose 配置
+# 架构：1个网关 + 6个相同的上游服务（Zone 001-006）
+version: '3.8'
+
+services:
+  # 网关服务器 - 首先启动
+  gatesvr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE}
+        GIT_COMMIT: ${GIT_COMMIT}
+    image: gatesvr:${VERSION:-latest}
+    container_name: gatesvr
+    hostname: gatesvr
+    restart: unless-stopped
+    ports:
+      - "8453:8453"   # QUIC端口
+      - "8080:8080"   # HTTP API端口
+      - "8092:8092"   # gRPC端口
+      - "9090:9090"   # Metrics端口
+    environment:
+      - CONFIG_FILE=docker-config.yaml
+      - LOG_LEVEL=info
+      - SERVER_ID=gatesvr-docker-01
+      - GATESVR_QUIC_ADDR=:8453
+      - GATESVR_HTTP_ADDR=:8080
+      - GATESVR_GRPC_ADDR=:8092
+      - GATESVR_METRICS_ADDR=:9090
+    volumes:
+      - ./docker/config/docker-config.yaml:/app/docker-config.yaml:ro
+      - ./certs:/app/certs:ro
+      - gatesvr-logs:/app/logs
+    networks:
+      gatesvr-network:
+        ipv4_address: 172.20.0.10
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # 上游服务 Zone 001
+  upstream-001:
+    build:
+      context: .
+      dockerfile: docker/upstream/Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE}
+        GIT_COMMIT: ${GIT_COMMIT}
+    image: upstream:${VERSION:-latest}
+    container_name: upstream-001
+    hostname: upstream-001
+    restart: unless-stopped
+    ports:
+      - "9001:9001"   # gRPC服务端口
+      - "10001:10001" # HTTP健康检查端口
+    environment:
+      - UPSTREAM_ZONE=001
+      - UPSTREAM_ADDR=:9001
+      - GATEWAY_ADDR=gatesvr:8092
+    depends_on:
+      gatesvr:
+        condition: service_healthy
+    networks:
+      gatesvr-network:
+        ipv4_address: 172.20.0.101
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # 上游服务 Zone 002
+  upstream-002:
+    build:
+      context: .
+      dockerfile: docker/upstream/Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE}
+        GIT_COMMIT: ${GIT_COMMIT}
+    image: upstream:${VERSION:-latest}
+    container_name: upstream-002
+    hostname: upstream-002
+    restart: unless-stopped
+    ports:
+      - "9002:9002"   # gRPC服务端口
+      - "10002:10002" # HTTP健康检查端口
+    environment:
+      - UPSTREAM_ZONE=002
+      - UPSTREAM_ADDR=:9002
+      - GATEWAY_ADDR=gatesvr:8092
+    depends_on:
+      gatesvr:
+        condition: service_healthy
+    networks:
+      gatesvr-network:
+        ipv4_address: 172.20.0.102
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # 上游服务 Zone 003
+  upstream-003:
+    build:
+      context: .
+      dockerfile: docker/upstream/Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE}
+        GIT_COMMIT: ${GIT_COMMIT}
+    image: upstream:${VERSION:-latest}
+    container_name: upstream-003
+    hostname: upstream-003
+    restart: unless-stopped
+    ports:
+      - "9003:9003"   # gRPC服务端口
+      - "10003:10003" # HTTP健康检查端口
+    environment:
+      - UPSTREAM_ZONE=003
+      - UPSTREAM_ADDR=:9003
+      - GATEWAY_ADDR=gatesvr:8092
+    depends_on:
+      gatesvr:
+        condition: service_healthy
+    networks:
+      gatesvr-network:
+        ipv4_address: 172.20.0.103
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # 上游服务 Zone 004
+  upstream-004:
+    build:
+      context: .
+      dockerfile: docker/upstream/Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE}
+        GIT_COMMIT: ${GIT_COMMIT}
+    image: upstream:${VERSION:-latest}
+    container_name: upstream-004
+    hostname: upstream-004
+    restart: unless-stopped
+    ports:
+      - "9004:9004"   # gRPC服务端口
+      - "10004:10004" # HTTP健康检查端口
+    environment:
+      - UPSTREAM_ZONE=004
+      - UPSTREAM_ADDR=:9004
+      - GATEWAY_ADDR=gatesvr:8092
+    depends_on:
+      gatesvr:
+        condition: service_healthy
+    networks:
+      gatesvr-network:
+        ipv4_address: 172.20.0.104
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # 上游服务 Zone 005
+  upstream-005:
+    build:
+      context: .
+      dockerfile: docker/upstream/Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE}
+        GIT_COMMIT: ${GIT_COMMIT}
+    image: upstream:${VERSION:-latest}
+    container_name: upstream-005
+    hostname: upstream-005
+    restart: unless-stopped
+    ports:
+      - "9005:9005"   # gRPC服务端口
+      - "10005:10005" # HTTP健康检查端口
+    environment:
+      - UPSTREAM_ZONE=005
+      - UPSTREAM_ADDR=:9005
+      - GATEWAY_ADDR=gatesvr:8092
+    depends_on:
+      gatesvr:
+        condition: service_healthy
+    networks:
+      gatesvr-network:
+        ipv4_address: 172.20.0.105
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # 上游服务 Zone 006
+  upstream-006:
+    build:
+      context: .
+      dockerfile: docker/upstream/Dockerfile
+      args:
+        VERSION: ${VERSION:-latest}
+        BUILD_DATE: ${BUILD_DATE}
+        GIT_COMMIT: ${GIT_COMMIT}
+    image: upstream:${VERSION:-latest}
+    container_name: upstream-006
+    hostname: upstream-006
+    restart: unless-stopped
+    ports:
+      - "9006:9006"   # gRPC服务端口
+      - "10006:10006" # HTTP健康检查端口
+    environment:
+      - UPSTREAM_ZONE=006
+      - UPSTREAM_ADDR=:9006
+      - GATEWAY_ADDR=gatesvr:8092
+    depends_on:
+      gatesvr:
+        condition: service_healthy
+    networks:
+      gatesvr-network:
+        ipv4_address: 172.20.0.106
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+
+# 网络配置
+networks:
+  gatesvr-network:
+    name: gatesvr-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    driver_opts:
+      com.docker.network.bridge.name: gatesvr0
+
+# 数据卷配置
+volumes:
+  gatesvr-logs:
+    name: gatesvr-logs
+    driver: local
+  gatesvr-data:
+    name: gatesvr-data
+    driver: local

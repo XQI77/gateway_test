@@ -96,7 +96,20 @@ func NewServer(config *Config) *Server {
 	}
 	server.asyncProcessor = NewAsyncRequestProcessor(server, asyncConfig)
 
+	// 初始化上游服务配置
+	server.initUpstreamServices()
+
 	return server
+}
+
+// initUpstreamServices 初始化上游服务配置
+func (s *Server) initUpstreamServices() {
+	// 从配置中添加上游服务
+	for serviceName, addresses := range s.config.UpstreamServices {
+		serviceType := upstream.ServiceType(serviceName)
+		s.upstreamServices.AddService(serviceType, addresses)
+		log.Printf("已配置上游服务: %s -> %v", serviceName, addresses)
+	}
 }
 
 // 启动网关服务器

@@ -18,7 +18,7 @@ import (
 
 func main() {
 	setupLogToFile()
-	
+
 	flags := parseFlags()
 	if flags.showVersion {
 		printVersion()
@@ -89,15 +89,15 @@ func parseFlags() *cliFlags {
 		syncTimeout:       flag.Duration("sync-timeout", 0, "同步超时"),
 		readonly:          flag.Bool("readonly", false, "只读模式"),
 	}
-	
+
 	showVersion := flag.Bool("version", false, "显示版本信息")
 	showHelp := flag.Bool("help", false, "显示帮助信息")
-	
+
 	flag.Parse()
-	
+
 	flags.showVersion = *showVersion
 	flags.showHelp = *showHelp
-	
+
 	return flags
 }
 
@@ -232,7 +232,7 @@ func applyBackupConfig(cfg *config.GatewayConfig, flags *cliFlags, originalCfg *
 			log.Fatalf("无效的备份模式: %s", *flags.backupMode)
 		}
 	}
-	
+
 	if *flags.peerAddr != "" {
 		cfg.BackupConfig.Sync.PeerAddr = *flags.peerAddr
 	}
@@ -259,7 +259,7 @@ func convertOverloadConfig(cfg *config.GatewayConfig) *gateway.OverloadConfig {
 	if cfg.OverloadProtection == nil {
 		return nil
 	}
-	
+
 	return &gateway.OverloadConfig{
 		Enabled:                    cfg.OverloadProtection.Enabled,
 		MaxConnections:             cfg.OverloadProtection.MaxConnections,

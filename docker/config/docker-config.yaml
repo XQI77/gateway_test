@@ -6,26 +6,14 @@ server:
   grpc_addr: ":8092"          # gRPC服务地址
   metrics_addr: ":9090"       # 监控地址
   
-  # 基于Zone的上游服务配置 - Docker版本
-  # 上游服务将通过gRPC RegisterUpstream自动注册
-  # 无需预配置服务地址，支持动态注册和负载均衡
-  
-  # Zone路由说明:
-  # OpenID Hash % 6 分配到6个zone：
-  # Zone 001: Hash % 6 == 0
-  # Zone 002: Hash % 6 == 1
-  # Zone 003: Hash % 6 == 2
-  # Zone 004: Hash % 6 == 3
-  # Zone 005: Hash % 6 == 4
-  # Zone 006: Hash % 6 == 5
-  
-  # Docker容器中的上游服务自动注册：
-  # upstream-001 -> Zone 001, 地址: upstream-001:9001
-  # upstream-002 -> Zone 002, 地址: upstream-002:9002
-  # upstream-003 -> Zone 003, 地址: upstream-003:9003
-  # upstream-004 -> Zone 004, 地址: upstream-004:9004
-  # upstream-005 -> Zone 005, 地址: upstream-005:9005
-  # upstream-006 -> Zone 006, 地址: upstream-006:9006
+  # 多上游服务配置 - 测试用
+  upstream_services:
+    hello:
+      - "hellosvr:8081"      # Hello服务端口
+    business:
+      - "businesssvr:8081"      # Business服务端口  
+    zone:
+      - "zonesvr:8081"      # Zone服务端口
   
   cert_file: "certs/server.crt"
   key_file: "certs/server.key"

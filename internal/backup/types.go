@@ -66,13 +66,13 @@ type QueueMetadata struct {
 
 // HeartbeatData 心跳数据
 type HeartbeatData struct {
-	ServerID      string    `json:"server_id"`      // 服务器ID
-	Mode          ServerMode `json:"mode"`          // 服务器模式
-	Timestamp     int64     `json:"timestamp"`      // 时间戳
-	SessionCount  int       `json:"session_count"`  // 会话数量
-	QueueCount    int       `json:"queue_count"`    // 队列总数
-	IsHealthy     bool      `json:"is_healthy"`     // 健康状态
-	LastSyncTime  int64     `json:"last_sync_time"` // 最后同步时间
+	ServerID     string     `json:"server_id"`      // 服务器ID
+	Mode         ServerMode `json:"mode"`           // 服务器模式
+	Timestamp    int64      `json:"timestamp"`      // 时间戳
+	SessionCount int        `json:"session_count"`  // 会话数量
+	QueueCount   int        `json:"queue_count"`    // 队列总数
+	IsHealthy    bool       `json:"is_healthy"`     // 健康状态
+	LastSyncTime int64      `json:"last_sync_time"` // 最后同步时间
 }
 
 // FullSyncData 全量同步数据
@@ -87,7 +87,7 @@ type FullSyncData struct {
 
 // SyncConfig 同步配置
 type SyncConfig struct {
-	Enabled           bool          `json:"enabled"`             // 是否启用备份
+	Enabled           bool          `json:"enabled"`            // 是否启用备份
 	Mode              ServerMode    `json:"mode"`               // 服务器模式
 	PeerAddr          string        `json:"peer_addr"`          // 对端地址
 	HeartbeatInterval time.Duration `json:"heartbeat_interval"` // 心跳间隔
@@ -107,8 +107,8 @@ type FailoverConfig struct {
 
 // BackupConfig 备份总配置
 type BackupConfig struct {
-	Sync          SyncConfig     `json:"sync"`          // 同步配置
-	Failover      FailoverConfig `json:"failover"`      // 故障切换配置
+	Sync          SyncConfig     `json:"sync"`           // 同步配置
+	Failover      FailoverConfig `json:"failover"`       // 故障切换配置
 	HeartbeatAddr string         `json:"heartbeat_addr"` // 心跳地址（分离后的）
 	SyncAddr      string         `json:"sync_addr"`      // 同步地址（分离后的）
 }

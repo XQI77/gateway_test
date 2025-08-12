@@ -6,31 +6,31 @@ import (
 	"os"
 	"time"
 
-	"gopkg.in/yaml.v3"
 	"gatesvr/internal/backup"
+	"gopkg.in/yaml.v3"
 )
 
 // Config 应用程序配置
 type Config struct {
-	Server            ServerConfig            `yaml:"server"`
-	StartProcessor    StartProcessorConfig    `yaml:"start_processor"`
-	Backup            BackupConfig            `yaml:"backup"`
+	Server             ServerConfig             `yaml:"server"`
+	StartProcessor     StartProcessorConfig     `yaml:"start_processor"`
+	Backup             BackupConfig             `yaml:"backup"`
 	OverloadProtection OverloadProtectionConfig `yaml:"overload_protection"`
 }
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	QUICAddr       string                    `yaml:"quic_addr"`
-	HTTPAddr       string                    `yaml:"http_addr"`
-	GRPCAddr       string                    `yaml:"grpc_addr"`
-	MetricsAddr    string                    `yaml:"metrics_addr"`
-	UpstreamAddr   string                    `yaml:"upstream_addr"`   // 保留向后兼容
-	UpstreamServices map[string][]string     `yaml:"upstream_services"` // 新的多上游配置
-	CertFile       string                    `yaml:"cert_file"`
-	KeyFile        string                    `yaml:"key_file"`
-	SessionTimeout string                    `yaml:"session_timeout"`
-	AckTimeout     string                    `yaml:"ack_timeout"`
-	MaxRetries     int                       `yaml:"max_retries"`
+	QUICAddr         string              `yaml:"quic_addr"`
+	HTTPAddr         string              `yaml:"http_addr"`
+	GRPCAddr         string              `yaml:"grpc_addr"`
+	MetricsAddr      string              `yaml:"metrics_addr"`
+	UpstreamAddr     string              `yaml:"upstream_addr"`     // 保留向后兼容
+	UpstreamServices map[string][]string `yaml:"upstream_services"` // 新的多上游配置
+	CertFile         string              `yaml:"cert_file"`
+	KeyFile          string              `yaml:"key_file"`
+	SessionTimeout   string              `yaml:"session_timeout"`
+	AckTimeout       string              `yaml:"ack_timeout"`
+	MaxRetries       int                 `yaml:"max_retries"`
 }
 
 // StartProcessorConfig START消息处理器配置
@@ -43,19 +43,19 @@ type StartProcessorConfig struct {
 
 // HeartbeatConfig 心跳配置
 type HeartbeatConfig struct {
-	Interval  string `yaml:"interval"`    // 心跳间隔
-	PeerAddr  string `yaml:"peer_addr"`   // 主服务器连接目标地址
+	Interval   string `yaml:"interval"`    // 心跳间隔
+	PeerAddr   string `yaml:"peer_addr"`   // 主服务器连接目标地址
 	ListenAddr string `yaml:"listen_addr"` // 备份服务器监听地址
-	Timeout   string `yaml:"timeout"`     // 心跳超时时间
+	Timeout    string `yaml:"timeout"`     // 心跳超时时间
 }
 
 // SyncConfig 同步配置
 type SyncConfig struct {
-	PeerAddr   string `yaml:"peer_addr"`    // 主服务器连接目标地址
-	ListenAddr string `yaml:"listen_addr"`  // 备份服务器监听地址
-	BatchSize  int    `yaml:"batch_size"`   // 同步批次大小
-	Timeout    string `yaml:"timeout"`      // 同步超时
-	BufferSize int    `yaml:"buffer_size"`  // 同步缓冲区大小
+	PeerAddr   string `yaml:"peer_addr"`   // 主服务器连接目标地址
+	ListenAddr string `yaml:"listen_addr"` // 备份服务器监听地址
+	BatchSize  int    `yaml:"batch_size"`  // 同步批次大小
+	Timeout    string `yaml:"timeout"`     // 同步超时
+	BufferSize int    `yaml:"buffer_size"` // 同步缓冲区大小
 }
 
 // BackupConfig 备份配置
@@ -70,15 +70,15 @@ type BackupConfig struct {
 
 // OverloadProtectionConfig 过载保护配置
 type OverloadProtectionConfig struct {
-	Enabled                      bool   `yaml:"enabled"`
-	MaxConnections              int    `yaml:"max_connections"`
-	ConnectionWarningThreshold   int    `yaml:"connection_warning_threshold"`
-	MaxQPS                      int    `yaml:"max_qps"`
-	QPSWarningThreshold         int    `yaml:"qps_warning_threshold"`
-	QPSWindowSeconds            int    `yaml:"qps_window_seconds"`
-	MaxUpstreamConcurrent       int    `yaml:"max_upstream_concurrent"`
-	UpstreamTimeout             string `yaml:"upstream_timeout"`
-	UpstreamWarningThreshold    int    `yaml:"upstream_warning_threshold"`
+	Enabled                    bool   `yaml:"enabled"`
+	MaxConnections             int    `yaml:"max_connections"`
+	ConnectionWarningThreshold int    `yaml:"connection_warning_threshold"`
+	MaxQPS                     int    `yaml:"max_qps"`
+	QPSWarningThreshold        int    `yaml:"qps_warning_threshold"`
+	QPSWindowSeconds           int    `yaml:"qps_window_seconds"`
+	MaxUpstreamConcurrent      int    `yaml:"max_upstream_concurrent"`
+	UpstreamTimeout            string `yaml:"upstream_timeout"`
+	UpstreamWarningThreshold   int    `yaml:"upstream_warning_threshold"`
 }
 
 // Load 从文件加载配置
@@ -230,15 +230,15 @@ func (c *Config) ToGatewayConfig() (*GatewayConfig, error) {
 		}
 
 		config.OverloadProtection = &OverloadProtectionGatewayConfig{
-			Enabled:                      c.OverloadProtection.Enabled,
-			MaxConnections:              c.OverloadProtection.MaxConnections,
-			ConnectionWarningThreshold:   c.OverloadProtection.ConnectionWarningThreshold,
-			MaxQPS:                      c.OverloadProtection.MaxQPS,
-			QPSWarningThreshold:         c.OverloadProtection.QPSWarningThreshold,
-			QPSWindowSeconds:            c.OverloadProtection.QPSWindowSeconds,
-			MaxUpstreamConcurrent:       c.OverloadProtection.MaxUpstreamConcurrent,
-			UpstreamTimeout:             upstreamTimeout,
-			UpstreamWarningThreshold:    c.OverloadProtection.UpstreamWarningThreshold,
+			Enabled:                    c.OverloadProtection.Enabled,
+			MaxConnections:             c.OverloadProtection.MaxConnections,
+			ConnectionWarningThreshold: c.OverloadProtection.ConnectionWarningThreshold,
+			MaxQPS:                     c.OverloadProtection.MaxQPS,
+			QPSWarningThreshold:        c.OverloadProtection.QPSWarningThreshold,
+			QPSWindowSeconds:           c.OverloadProtection.QPSWindowSeconds,
+			MaxUpstreamConcurrent:      c.OverloadProtection.MaxUpstreamConcurrent,
+			UpstreamTimeout:            upstreamTimeout,
+			UpstreamWarningThreshold:   c.OverloadProtection.UpstreamWarningThreshold,
 		}
 
 		// 设置默认值
@@ -270,21 +270,21 @@ func (c *Config) ToGatewayConfig() (*GatewayConfig, error) {
 
 // GatewayConfig 网关配置（兼容现有接口）
 type GatewayConfig struct {
-	QUICAddr            string
-	HTTPAddr            string
-	GRPCAddr            string
-	MetricsAddr         string
-	UpstreamAddr        string                        // 保留向后兼容
-	UpstreamServices    map[string][]string           // 新的多上游配置
-	TLSCertFile         string
-	TLSKeyFile          string
-	SessionTimeout      time.Duration
-	AckTimeout          time.Duration
-	MaxRetries          int
-	StartProcessor      *StartProcessorGatewayConfig
-	BackupConfig        *backup.BackupConfig
-	ServerID            string
-	OverloadProtection  *OverloadProtectionGatewayConfig
+	QUICAddr           string
+	HTTPAddr           string
+	GRPCAddr           string
+	MetricsAddr        string
+	UpstreamAddr       string              // 保留向后兼容
+	UpstreamServices   map[string][]string // 新的多上游配置
+	TLSCertFile        string
+	TLSKeyFile         string
+	SessionTimeout     time.Duration
+	AckTimeout         time.Duration
+	MaxRetries         int
+	StartProcessor     *StartProcessorGatewayConfig
+	BackupConfig       *backup.BackupConfig
+	ServerID           string
+	OverloadProtection *OverloadProtectionGatewayConfig
 }
 
 // StartProcessorGatewayConfig START处理器网关配置
@@ -297,13 +297,13 @@ type StartProcessorGatewayConfig struct {
 
 // OverloadProtectionGatewayConfig 网关过载保护配置
 type OverloadProtectionGatewayConfig struct {
-	Enabled                      bool
-	MaxConnections              int
-	ConnectionWarningThreshold   int
-	MaxQPS                      int
-	QPSWarningThreshold         int
-	QPSWindowSeconds            int
-	MaxUpstreamConcurrent       int
-	UpstreamTimeout             time.Duration
-	UpstreamWarningThreshold    int
+	Enabled                    bool
+	MaxConnections             int
+	ConnectionWarningThreshold int
+	MaxQPS                     int
+	QPSWarningThreshold        int
+	QPSWindowSeconds           int
+	MaxUpstreamConcurrent      int
+	UpstreamTimeout            time.Duration
+	UpstreamWarningThreshold   int
 }

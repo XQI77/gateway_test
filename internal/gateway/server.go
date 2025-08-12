@@ -36,7 +36,8 @@ type Server struct {
 	orderedSender      *OrderedMessageSender
 
 	// 上游服务管理
-	upstreamRouter *upstream.OpenIDBasedRouter // 基于OpenID的上游服务路由器
+	upstreamServices *upstream.UpstreamServices //
+	upstreamManager  *upstream.ServiceManager   // 上游服务连接管理器
 
 	// 服务器实例
 	quicListener  *quic.Listener
@@ -67,13 +68,8 @@ func NewServer(config *Config) *Server {
 		messageCodec:       message.NewMessageCodec(),
 		metrics:            metrics.NewGateServerMetrics(),
 		performanceTracker: NewSimpleTracker(),
-		upstreamRouter:     upstream.NewOpenIDBasedRouter(),
+		upstreamServices:   upstream.NewUpstreamServices(),
 		stopCh:             make(chan struct{}),
-	}
-
-	// 验证上游路由配置
-	if err := server.validateUpstreamRouting(); err != nil {
-		log.Printf("上游路由配置验证失败: %v", err)
 	}
 
 	// 初始化有序消息发送器
@@ -100,7 +96,20 @@ func NewServer(config *Config) *Server {
 	}
 	server.asyncProcessor = NewAsyncRequestProcessor(server, asyncConfig)
 
+	// 初始化上游服务配置
+	server.initUpstreamServices()
+
 	return server
+}
+
+// initUpstreamServices 初始化上游服务配置
+func (s *Server) initUpstreamServices() {
+	// 从配置中添加上游服务
+	for serviceName, addresses := range s.config.UpstreamServices {
+		serviceType := upstream.ServiceType(serviceName)
+		s.upstreamServices.AddService(serviceType, addresses)
+		log.Printf("已配置上游服务: %s -> %v", serviceName, addresses)
+	}
 }
 
 // 启动网关服务器
@@ -211,11 +220,6 @@ func (s *Server) Stop() {
 		}
 	}
 	s.sessionManager.Stop()
-	if s.upstreamRouter != nil {
-		if err := s.upstreamRouter.Close(); err != nil {
-			log.Printf("关闭上游服务路由器失败: %v", err)
-		}
-	}
 
 	s.wg.Wait()
 

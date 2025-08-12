@@ -188,6 +188,11 @@ func (ap *AsyncRequestProcessor) processTask(workerID int, task *AsyncTask) {
 		ap.server.sendErrorResponse(task.Session, task.Request.MsgId, 500, "上游服务错误", err.Error())
 		return
 	}
+	// 处理绑定notify消息
+	grid := uint32(task.Request.SeqId)
+	if err := ap.server.sendBeforeNotifies(task.Session, grid); err != nil {
+		log.Printf("异步处理response 之前发送的 notify消息失败 - 任务: %s, 错误: %v", task.TaskID, err)
+	}
 
 	if err := ap.server.orderedSender.SendBusinessResponse(task.Session, task.Request.MsgId,
 		upstreamResp.Code, upstreamResp.Message, upstreamResp.Data, upstreamResp.Headers); err != nil {
@@ -196,9 +201,8 @@ func (ap *AsyncRequestProcessor) processTask(workerID int, task *AsyncTask) {
 	}
 
 	// 处理绑定notify消息
-	grid := uint32(task.Request.SeqId)
-	if err := ap.server.processBoundNotifies(task.Session, grid); err != nil {
-		log.Printf("异步处理绑定notify消息失败 - 任务: %s, 错误: %v", task.TaskID, err)
+	if err := ap.server.sendAfterNotifies(task.Session, grid); err != nil {
+		log.Printf("异步处理response之后发送的notify消息失败 - 任务: %s, 错误: %v", task.TaskID, err)
 	}
 
 	log.Printf("异步任务处理成功 - 任务: %s, 响应码: %d",

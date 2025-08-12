@@ -44,7 +44,7 @@ type Server struct {
 	metricsServer *metrics.MetricsServer
 	grpcServer    *grpc.Server
 
-	// 备份管理器
+	// 备份管理器(暂时没做好)
 	backupManager backup.BackupManager
 
 	// 过载保护器

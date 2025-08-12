@@ -471,7 +471,7 @@ func (s *Server) handleAfterCommand(ctx context.Context, req *pb.UpstreamRequest
 
 	if s.unicastClient != nil && req.Openid != "" {
 		go func() {
-			time.Sleep(50 * time.Millisecond)
+			//time.Sleep(50 * time.Millisecond)
 			pushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			notifyContent := fmt.Sprintf("【NOTIFY AFTER】%s - 时间: %s", message, time.Now().Format("15:04:05.000"))

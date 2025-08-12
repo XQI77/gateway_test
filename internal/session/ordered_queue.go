@@ -42,7 +42,7 @@ type OrderedMessageQueue struct {
 	sessionID string
 
 	waitingQueue MessageQueue               // 等待发送的消息队列
-	sentMessages map[uint64]*OrderedMessage // 已发送待确认的消息（有问题可能todo改）
+	sentMessages map[uint64]*OrderedMessage // 已发送待确认的消息
 	queueMux     sync.Mutex                 // 保护队列的锁
 
 	// 序列号

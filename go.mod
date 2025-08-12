@@ -6,6 +6,7 @@ toolchain go1.24.5
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/jinzhu/copier v0.4.0
 	github.com/prometheus/client_golang v1.19.1
 	github.com/quic-go/quic-go v0.54.0
 	google.golang.org/grpc v1.74.2

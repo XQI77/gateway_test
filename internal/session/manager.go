@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jinzhu/copier"
 	"github.com/quic-go/quic-go"
 )
 
@@ -60,7 +61,7 @@ func (m *Manager) CreateOrReconnectSession(conn *quic.Conn, stream *quic.Stream,
 		}
 	}
 
-	// 锁外创建新会话对象
+	// 创建新会话对象
 	sessionID := uuid.New().String()
 	newSession := &Session{
 		ID:           sessionID,
@@ -91,8 +92,8 @@ func (m *Manager) CreateOrReconnectSession(conn *quic.Conn, stream *quic.Stream,
 			if currentOldSession := currentValue.(*Session); currentOldSession == oldSession {
 				// 重连处理
 				newSession.InheritFrom(oldSession)
-				newSession.SetSuccessor(true)
 				m.handleOldSessionOnReconnectAtomic(oldSession, newSession)
+				copier.Copy(&newSession.orderedQueue.sentMessages, &oldSession.orderedQueue.sentMessages)
 
 				fmt.Printf("检测到重连 - 客户端: %s, 用户: %s, 旧会话: %s, 新会话: %s\n",
 					clientID, openID, oldSession.ID, newSession.ID)

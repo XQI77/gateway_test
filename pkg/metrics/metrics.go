@@ -10,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// GateServerMetrics 网关服务器监控指标
+// 监控指标
 type GateServerMetrics struct {
 	// QPS指标 - 每秒处理的请求数
 	qpsCounter prometheus.Counter
@@ -34,8 +34,8 @@ type GateServerMetrics struct {
 	connectionsRejected *prometheus.CounterVec // 被拒绝的连接数
 	requestsRejected    *prometheus.CounterVec // 被拒绝的请求数
 	upstreamRejected    *prometheus.CounterVec // 被拒绝的上游请求数
-	currentQPS          prometheus.Gauge        // 当前QPS
-	upstreamConcurrent  prometheus.Gauge        // 当前上游并发数
+	currentQPS          prometheus.Gauge       // 当前QPS
+	upstreamConcurrent  prometheus.Gauge       // 当前上游并发数
 }
 
 // NewGateServerMetrics 创建新的监控指标实例
@@ -127,72 +127,58 @@ func NewGateServerMetrics() *GateServerMetrics {
 	}
 }
 
-// IncQPS 增加QPS计数
 func (m *GateServerMetrics) IncQPS() {
 	m.qpsCounter.Inc()
 }
 
-// AddThroughput 增加吞吐量计数
 func (m *GateServerMetrics) AddThroughput(direction string, bytes int64) {
 	m.throughputBytes.WithLabelValues(direction).Add(float64(bytes))
 }
 
-// SetActiveConnections 设置活跃连接数
 func (m *GateServerMetrics) SetActiveConnections(count int) {
 	m.activeConnections.Set(float64(count))
 }
 
-// SetOutboundQueueSize 设置出站队列大小
 func (m *GateServerMetrics) SetOutboundQueueSize(sessionID string, size int) {
 	m.outboundQueueSize.WithLabelValues(sessionID).Set(float64(size))
 }
 
-// ObserveRequestDuration 记录请求处理时间
 func (m *GateServerMetrics) ObserveRequestDuration(requestType string, duration time.Duration) {
 	m.requestDuration.WithLabelValues(requestType).Observe(duration.Seconds())
 }
 
-// IncError 增加错误计数
 func (m *GateServerMetrics) IncError(errorType string) {
 	m.errorCounter.WithLabelValues(errorType).Inc()
 }
 
-// RemoveSession 移除会话相关的指标
 func (m *GateServerMetrics) RemoveSession(sessionID string) {
 	m.outboundQueueSize.DeleteLabelValues(sessionID)
 }
 
-// IncConnectionsRejected 增加被拒绝的连接数
 func (m *GateServerMetrics) IncConnectionsRejected(reason string) {
 	m.connectionsRejected.WithLabelValues(reason).Inc()
 }
 
-// IncRequestsRejected 增加被拒绝的请求数
 func (m *GateServerMetrics) IncRequestsRejected(reason string) {
 	m.requestsRejected.WithLabelValues(reason).Inc()
 }
 
-// IncUpstreamRejected 增加被拒绝的上游请求数
 func (m *GateServerMetrics) IncUpstreamRejected(reason string) {
 	m.upstreamRejected.WithLabelValues(reason).Inc()
 }
 
-// SetCurrentQPS 设置当前QPS
 func (m *GateServerMetrics) SetCurrentQPS(qps float64) {
 	m.currentQPS.Set(qps)
 }
 
-// SetUpstreamConcurrent 设置当前上游并发数
 func (m *GateServerMetrics) SetUpstreamConcurrent(count int64) {
 	m.upstreamConcurrent.Set(float64(count))
 }
 
-// MetricsServer 监控指标服务器
 type MetricsServer struct {
 	server *http.Server
 }
 
-// NewMetricsServer 创建新的监控指标服务器
 func NewMetricsServer(addr string) *MetricsServer {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -209,12 +195,10 @@ func NewMetricsServer(addr string) *MetricsServer {
 	}
 }
 
-// Start 启动监控服务器
 func (s *MetricsServer) Start() error {
 	return s.server.ListenAndServe()
 }
 
-// Stop 停止监控服务器
 func (s *MetricsServer) Stop() error {
 	return s.server.Close()
 }

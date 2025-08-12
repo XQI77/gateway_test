@@ -150,49 +150,6 @@ func (s *Server) getSessionsAsyncStatus() map[string]interface{} {
 	}
 }
 
-/*
-// 处理时延分解查询
-func (s *Server) handleLatencyBreakdown(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	detailedStats := s.performanceTracker.detailedLatencyTracker.GetDetailedStats()
-
-	// 构建分解统计
-	breakdown := map[string]interface{}{
-		"latency_breakdown": map[string]interface{}{
-			"io_processing": map[string]interface{}{
-				"read_latency": detailedStats["read_latency"],
-				"description":  "IO读取时延（包含网络等待和阻塞时间）",
-			},
-			"pure_processing": map[string]interface{}{
-				"process_latency": detailedStats["process_latency"],
-				"description":     "纯消息处理时延（不含IO等待）",
-			},
-			"message_processing": map[string]interface{}{
-				"parse_latency":  detailedStats["parse_latency"],
-				"encode_latency": detailedStats["encode_latency"],
-				"description":    "消息解析和编码时延",
-			},
-			"upstream_processing": map[string]interface{}{
-				"upstream_latency": detailedStats["upstream_latency"],
-				"description":      "上游服务处理时延",
-			},
-			"network_processing": map[string]interface{}{
-				"send_latency": detailedStats["send_latency"],
-				"description":  "网络发送时延",
-			},
-			"total_processing": map[string]interface{}{
-				"total_latency": detailedStats["total_latency"],
-				"description":   "端到端处理时延",
-			},
-		},
-		"timestamp": time.Now().Unix(),
-	}
-
-	json.NewEncoder(w).Encode(breakdown)
-}
-*/
-
 // 处理客户端时延查询
 func (s *Server) handleClientLatency(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

@@ -1,4 +1,4 @@
-// Package upstream 提供上游服务管理和调用接口
+// Package upstream 提供基于OpenID的上游服务路由管理
 package upstream
 
 import (
@@ -7,155 +7,180 @@ import (
 	"log"
 	"sync"
 
-	pb "gatesvr/proto"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	pb "gatesvr/proto"
 )
 
-type ServiceManager struct {
-	services    *UpstreamServices
-	connections map[string]*grpc.ClientConn         // endpoint -> connection
-	clients     map[string]pb.UpstreamServiceClient // endpoint -> client
-	mu          sync.RWMutex
-	ctx         context.Context
-	cancel      context.CancelFunc
+// OpenIDBasedRouter 基于OpenID的上游服务路由器
+type OpenIDBasedRouter struct {
+	zoneServices *ZoneBasedUpstreamServices
+	connections  map[string]*grpc.ClientConn // address -> connection
+	mu           sync.RWMutex
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
-func NewServiceManager(services *UpstreamServices) *ServiceManager {
+// NewOpenIDBasedRouter 创建基于OpenID的路由器
+func NewOpenIDBasedRouter() *OpenIDBasedRouter {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &ServiceManager{
-		services:    services,
-		connections: make(map[string]*grpc.ClientConn),
-		clients:     make(map[string]pb.UpstreamServiceClient),
-		ctx:         ctx,
-		cancel:      cancel,
+	return &OpenIDBasedRouter{
+		zoneServices: NewZoneBasedUpstreamServices(),
+		connections:  make(map[string]*grpc.ClientConn),
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 }
 
-func (sm *ServiceManager) GetClient(serviceType ServiceType) (pb.UpstreamServiceClient, error) {
-	service, err := sm.services.GetService(serviceType)
+// 注册上游服务实例
+func (r *OpenIDBasedRouter) RegisterUpstream(address, zoneID string) error {
+	// 验证zoneID格式
+	if !ValidateZoneID(zoneID) {
+		return fmt.Errorf("invalid zone_id format: %s, expected 001-006", zoneID)
+	}
+
+	// 创建gRPC客户端连接
+	client, err := r.createClient(address)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to create client for %s: %w", address, err)
 	}
 
-	if len(service.Addresses) == 0 {
-		return nil, fmt.Errorf("服务 %s 没有可用地址", serviceType)
-	}
-
-	// 简单选择第一个地址
-	endpoint := service.Addresses[0]
-
-	sm.mu.RLock()
-	client, exists := sm.clients[endpoint]
-	sm.mu.RUnlock()
-
-	if exists {
-		return client, nil
-	}
-
-	// 创建新连接和客户端
-	return sm.createClient(endpoint)
-}
-
-func (sm *ServiceManager) createClient(endpoint string) (pb.UpstreamServiceClient, error) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	if client, exists := sm.clients[endpoint]; exists {
-		return client, nil
-	}
-
-	conn, err := grpc.Dial(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// 注册实例
+	err = r.zoneServices.RegisterInstance(address, zoneID, client)
 	if err != nil {
-		return nil, fmt.Errorf("连接上游服务失败 %s: %w", endpoint, err)
+		return fmt.Errorf("failed to register instance: %w", err)
 	}
 
-	// 创建客户端
-	client := pb.NewUpstreamServiceClient(conn)
-
-	sm.connections[endpoint] = conn
-	sm.clients[endpoint] = client
-
-	log.Printf("已连接到上游服务: %s", endpoint)
-	return client, nil
-}
-
-func (sm *ServiceManager) CallService(ctx context.Context, serviceType ServiceType, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
-	client, err := sm.GetClient(serviceType)
-	if err != nil {
-		return nil, err
-	}
-
-	return client.ProcessRequest(ctx, req)
-}
-
-func (sm *ServiceManager) GetAllClients() map[ServiceType]pb.UpstreamServiceClient {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	result := make(map[ServiceType]pb.UpstreamServiceClient)
-
-	for serviceTypeStr := range sm.services.GetAllServices() {
-		if client, err := sm.GetClient(serviceTypeStr); err == nil {
-			result[serviceTypeStr] = client
-		}
-	}
-
-	return result
-}
-
-func (sm *ServiceManager) IsServiceConnected(serviceType ServiceType) bool {
-	service, err := sm.services.GetService(serviceType)
-	if err != nil {
-		return false
-	}
-
-	if len(service.Addresses) == 0 {
-		return false
-	}
-
-	endpoint := service.Addresses[0]
-
-	sm.mu.RLock()
-	_, exists := sm.clients[endpoint]
-	sm.mu.RUnlock()
-
-	return exists
-}
-
-func (sm *ServiceManager) Close() error {
-	sm.cancel()
-
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	for endpoint, conn := range sm.connections {
-		if err := conn.Close(); err != nil {
-			log.Printf("关闭上游服务连接失败 %s: %v", endpoint, err)
-		}
-	}
-
-	sm.connections = make(map[string]*grpc.ClientConn)
-	sm.clients = make(map[string]pb.UpstreamServiceClient)
-
-	log.Printf("上游服务管理器已关闭")
+	log.Printf("上游服务已注册 - Zone: %s, Address: %s", zoneID, address)
 	return nil
 }
 
-func (sm *ServiceManager) GetStats() map[string]interface{} {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	connectionStats := make(map[string]string)
-	for endpoint := range sm.connections {
-		connectionStats[endpoint] = "connected"
+// 根据OpenID路由到对应的上游服务
+func (r *OpenIDBasedRouter) RouteByOpenID(ctx context.Context, openID string, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
+	// 1. 根据OpenID计算ZoneID
+	zoneID, err := GetZoneByOpenID(openID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate zone for openid %s: %w", openID, err)
 	}
 
-	stats := sm.services.GetStats()
+	// 2. 获取该大区的上游服务实例
+	instance, err := r.zoneServices.GetInstanceByZone(zoneID)
+	if err != nil {
+		return nil, fmt.Errorf("no upstream service available for zone %s: %w", zoneID, err)
+	}
+
+	// 3. 更新服务实例活跃时间
+	r.zoneServices.UpdateInstanceLastSeen(zoneID)
+
+	// 4. 调用上游服务
+	log.Printf("路由请求 - OpenID: %s -> Zone: %s -> Address: %s, Action: %s",
+		openID, zoneID, instance.Address, req.Action)
+
+	response, err := instance.Client.ProcessRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("upstream service call failed for zone %s: %w", zoneID, err)
+	}
+
+	return response, nil
+}
+
+func (r *OpenIDBasedRouter) createClient(address string) (pb.UpstreamServiceClient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if conn, exists := r.connections[address]; exists {
+		return pb.NewUpstreamServiceClient(conn), nil
+	}
+
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to upstream service %s: %w", address, err)
+	}
+
+	client := pb.NewUpstreamServiceClient(conn)
+
+	r.connections[address] = conn
+
+	log.Printf("已连接到上游服务: %s", address)
+	return client, nil
+}
+
+// 根据大区ID获取服务实例
+func (r *OpenIDBasedRouter) GetInstanceByZone(zoneID string) (*UpstreamInstance, error) {
+	return r.zoneServices.GetInstanceByZone(zoneID)
+}
+
+func (r *OpenIDBasedRouter) GetAllInstances() map[string]*UpstreamInstance {
+	return r.zoneServices.GetAllInstances()
+}
+
+func (r *OpenIDBasedRouter) IsZoneAvailable(zoneID string) bool {
+	return r.zoneServices.IsZoneAvailable(zoneID)
+}
+
+func (r *OpenIDBasedRouter) RemoveUpstream(zoneID string) {
+
+	instance, err := r.zoneServices.GetInstanceByZone(zoneID)
+	if err != nil {
+		return
+	}
+
+	r.mu.Lock()
+	if conn, exists := r.connections[instance.Address]; exists {
+		conn.Close()
+		delete(r.connections, instance.Address)
+	}
+	r.mu.Unlock()
+
+	r.zoneServices.RemoveInstance(zoneID)
+	log.Printf("上游服务已移除 - Zone: %s, Address: %s", zoneID, instance.Address)
+}
+
+func (r *OpenIDBasedRouter) Close() error {
+	r.cancel()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for address, conn := range r.connections {
+		if err := conn.Close(); err != nil {
+			log.Printf("关闭上游服务连接失败 %s: %v", address, err)
+		}
+	}
+
+	r.connections = make(map[string]*grpc.ClientConn)
+
+	log.Printf("上游服务路由器已关闭")
+	return nil
+}
+
+func (r *OpenIDBasedRouter) GetStats() map[string]interface{} {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	connectionStats := make(map[string]string)
+	for address := range r.connections {
+		connectionStats[address] = "connected"
+	}
+
+	stats := r.zoneServices.GetStats()
 	stats["connections"] = connectionStats
-	stats["connection_count"] = len(sm.connections)
+	stats["connection_count"] = len(r.connections)
 
 	return stats
+}
+
+func (r *OpenIDBasedRouter) ValidateOpenID(openID string) (string, error) {
+	zoneID, err := GetZoneByOpenID(openID)
+	if err != nil {
+		return "", err
+	}
+
+	if !r.IsZoneAvailable(zoneID) {
+		return "", fmt.Errorf("zone %s has no available upstream service", zoneID)
+	}
+
+	return zoneID, nil
 }

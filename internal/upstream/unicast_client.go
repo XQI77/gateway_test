@@ -141,13 +141,11 @@ func (c *UnicastClient) DemoUnicastPush() {
 
 	log.Println("=== 演示单播推送功能 ===")
 
-	// 1. 推送到指定GID
 	err := c.PushToGID(ctx, 12345, "system", "系统通知", "这是一条系统推送消息", []byte("test data"))
 	if err != nil {
 		log.Printf("推送到GID失败: %v", err)
 	}
 
-	// 2. 推送到指定OpenID
 	err = c.PushToOpenID(ctx, "user123", "personal", "个人消息", "您有新的消息", nil)
 	if err != nil {
 		log.Printf("推送到OpenID失败: %v", err)

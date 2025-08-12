@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"gatesvr/internal/session"
+	"gatesvr/internal/upstream"
 	pb "gatesvr/proto"
-	"google.golang.org/protobuf/proto"
 	"log"
 	"strconv"
 	"strings"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // 处理心跳消息
@@ -99,15 +101,15 @@ func (s *Server) handleBusinessRequest(ctx context.Context, sess *session.Sessio
 		upstreamCtx, cancel = context.WithTimeout(ctx, s.overloadProtector.config.UpstreamTimeout)
 		defer cancel()
 	}
-
-	serviceInfo := s.getUpstreamServiceInfo(sess.OpenID)
+	serviceType := s.determineUpstreamService(businessReq)
+	serviceInfo := s.getUpstreamServiceInfo(serviceType)
 
 	log.Printf("路由业务请求 - 动作: %s, OpenID: %s, 目标服务: %s", businessReq.Action, sess.OpenID, serviceInfo)
 
 	// Hello请求必须同步处理，等待上游服务返回结果
 	if isLoginAction {
 		log.Printf("Hello请求使用同步处理 - 会话: %s, 动作: %s", sess.ID, businessReq.Action)
-		return s.handleBusinessRequestSync(ctx, sess, req, businessReq, upstreamReq,
+		return s.handleBusinessRequestSync(ctx, sess, req, businessReq, serviceType, upstreamReq,
 			upstreamCtx, isLoginAction)
 	}
 
@@ -127,6 +129,7 @@ func (s *Server) handleBusinessRequest(ctx context.Context, sess *session.Sessio
 		Session:     sess,
 		Request:     req,
 		BusinessReq: businessReq,
+		ServiceType: serviceType,
 		UpstreamReq: upstreamReq,
 		Context:     asyncCtx,
 		IsLogin:     isLoginAction,
@@ -134,7 +137,7 @@ func (s *Server) handleBusinessRequest(ctx context.Context, sess *session.Sessio
 
 	if s.asyncProcessor == nil {
 		log.Printf("异步处理器未启用，使用同步处理 - 会话: %s", sess.ID)
-		return s.handleBusinessRequestSync(ctx, sess, req, businessReq, upstreamReq,
+		return s.handleBusinessRequestSync(ctx, sess, req, businessReq, serviceType, upstreamReq,
 			upstreamCtx, isLoginAction)
 	}
 
@@ -151,13 +154,13 @@ func (s *Server) handleBusinessRequest(ctx context.Context, sess *session.Sessio
 
 // 同步处理业务请求
 func (s *Server) handleBusinessRequestSync(ctx context.Context, sess *session.Session, req *pb.ClientRequest,
-	businessReq *pb.BusinessRequest, upstreamReq *pb.UpstreamRequest,
+	businessReq *pb.BusinessRequest, serviceType upstream.ServiceType, upstreamReq *pb.UpstreamRequest,
 	upstreamCtx context.Context, isLoginAction bool) bool {
 
-	upstreamResp, err := s.callUpstreamService(upstreamCtx, sess.OpenID, upstreamReq)
+	upstreamResp, err := s.callUpstreamService(upstreamCtx, serviceType, upstreamReq)
 
 	if err != nil {
-		serviceInfo := s.getUpstreamServiceInfo(sess.OpenID)
+		serviceInfo := s.getUpstreamServiceInfo(serviceType)
 		log.Printf("调用上游服务失败 - 服务: %s, 错误: %v", serviceInfo, err)
 		s.metrics.IncError("upstream_error")
 		s.sendErrorResponse(sess, req.MsgId, 500, "上游服务错误", err.Error())

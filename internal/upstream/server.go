@@ -1,3 +1,4 @@
+// Package upstream 提供上游gRPC服务实现
 package upstream
 
 import (
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	pb "gatesvr/proto"
 )
@@ -17,19 +17,30 @@ import (
 type Server struct {
 	pb.UnimplementedUpstreamServiceServer
 
-	addr              string
-	zoneID            string
-	gatewayAddr       string
-	unicastClient     *UnicastClient
-	startTime         time.Time
+	// 服务器配置
+	addr string
+
+	// 单播推送客户端（新增）
+	unicastClient *UnicastClient
+
+	// 服务状态
+	startTime time.Time
+
+	// 连接统计
 	activeConnections int32
 	connMutex         sync.RWMutex
-	loggedInUsers     map[string]*UserSession
-	usersMutex        sync.RWMutex
-	grpcServer        *grpc.Server
-	listener          net.Listener
-	stopCh            chan struct{}
-	wg                sync.WaitGroup
+
+	// 用户会话管理
+	loggedInUsers map[string]*UserSession // key是openid
+	usersMutex    sync.RWMutex
+
+	// gRPC服务器
+	grpcServer *grpc.Server
+	listener   net.Listener
+
+	// 停止信号
+	stopCh chan struct{}
+	wg     sync.WaitGroup
 }
 
 type UserSession struct {
@@ -43,74 +54,83 @@ func NewServer(addr string) *Server {
 	return &Server{
 		addr:          addr,
 		startTime:     time.Now(),
-		unicastClient: NewUnicastClient("localhost:8092"),
+		unicastClient: NewUnicastClient("localhost:8092"), // 网关gRPC地址
 		loggedInUsers: make(map[string]*UserSession),
 		stopCh:        make(chan struct{}),
 	}
 }
 
-func (s *Server) SetZoneInfo(zoneID, gatewayAddr string) {
-	s.zoneID = zoneID
-	s.gatewayAddr = gatewayAddr
-	s.unicastClient = NewUnicastClient(gatewayAddr)
-}
-
 func (s *Server) Start() error {
-	log.Printf("启动上游服务器: %s (Zone: %s)", s.addr, s.zoneID)
+	log.Printf("正在启动上游服务器: %s", s.addr)
 
+	// 连接到网关的单播推送服务
 	if err := s.unicastClient.Connect(); err != nil {
 		log.Printf("警告: 连接网关单播服务失败: %v", err)
 	}
 
-	if s.zoneID != "" && s.gatewayAddr != "" {
-		if err := s.registerToGateway(); err != nil {
-			log.Printf("警告: 注册到Gateway失败: %v", err)
-		}
-	}
-
+	// 监听端口
 	listener, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		return fmt.Errorf("监听端口失败: %w", err)
 	}
 	s.listener = listener
 
+	// 创建gRPC服务器
 	s.grpcServer = grpc.NewServer(
 		grpc.UnaryInterceptor(s.unaryInterceptor),
 		grpc.StreamInterceptor(s.streamInterceptor),
 	)
 
+	// 注册服务
 	pb.RegisterUpstreamServiceServer(s.grpcServer, s)
 
+	// 启动定时广播任务
 	s.wg.Add(1)
 	go s.broadcastRoutine()
 
 	log.Printf("上游服务器已启动: %s", s.addr)
+	log.Printf("gRPC服务接口:")
+	log.Printf("  ProcessRequest - 处理业务请求")
+	log.Printf("  GetStatus      - 获取服务状态")
+
+	// 启动gRPC服务
 	return s.grpcServer.Serve(listener)
 }
 
+// Stop 停止服务器
 func (s *Server) Stop() {
-	log.Printf("停止上游服务器...")
+	log.Printf("正在停止上游服务器...")
+
+	// 停止信号
 	close(s.stopCh)
 
+	// 关闭单播推送客户端
 	if s.unicastClient != nil {
 		s.unicastClient.Close()
 	}
+
+	// 停止gRPC服务器
 	if s.grpcServer != nil {
 		s.grpcServer.GracefulStop()
 	}
+
+	// 关闭监听器
 	if s.listener != nil {
 		s.listener.Close()
 	}
 
+	// 等待所有goroutine结束
 	s.wg.Wait()
+
 	log.Printf("上游服务器已停止")
 }
 
 func (s *Server) ProcessRequest(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
-	log.Printf("业务请求 - 会话: %s, 动作: %s", req.SessionId, req.Action)
+	log.Printf("收到业务请求 - 会话: %s, 动作: %s", req.SessionId, req.Action)
 
+	// 根据动作类型处理不同的业务逻辑
 	switch req.Action {
-	case "hello":
+	case "login", "auth", "signin", "hello":
 		return s.handleLogin(ctx, req)
 	case "logout":
 		return s.handleLogout(ctx, req)
@@ -141,26 +161,35 @@ func (s *Server) GetStatus(ctx context.Context, req *pb.StatusRequest) (*pb.Stat
 	s.connMutex.RUnlock()
 
 	uptime := time.Since(s.startTime).Seconds()
-	return &pb.StatusResponse{
+
+	metadata := map[string]string{
+		"version":    "1.0.0",
+		"go_version": "1.21",
+		"build_time": s.startTime.Format(time.RFC3339),
+	}
+
+	response := &pb.StatusResponse{
 		Status:            "healthy",
 		Uptime:            int64(uptime),
 		ActiveConnections: connCount,
-		Metadata: map[string]string{
-			"version":    "1.0.0",
-			"go_version": "1.21",
-			"build_time": s.startTime.Format(time.RFC3339),
-		},
-	}, nil
+		Metadata:          metadata,
+	}
+
+	log.Printf("返回服务状态 - 运行时间: %.0f秒, 活跃连接: %d",
+		uptime, connCount)
+
+	return response, nil
 }
 
-// Echo消息 + 单播推送演示
 func (s *Server) handleEcho(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	message := string(req.Data)
 
+	// 如果包含特殊参数，触发单播推送演示
 	if gid := req.Params["demo_unicast_gid"]; gid != "" && s.unicastClient != nil {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+
 			err := s.unicastClient.PushToClient(ctx, "gid", gid, "echo", "Echo推送",
 				fmt.Sprintf("您的echo消息: %s", message), req.Data)
 			if err != nil {
@@ -178,10 +207,12 @@ func (s *Server) handleEcho(ctx context.Context, req *pb.UpstreamRequest) (*pb.U
 
 func (s *Server) handleTime(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	now := time.Now()
+	timeStr := now.Format("2006-01-02 15:04:05")
+
 	return &pb.UpstreamResponse{
 		Code:    200,
 		Message: "当前时间",
-		Data:    []byte(now.Format("2006-01-02 15:04:05")),
+		Data:    []byte(timeStr),
 		Headers: map[string]string{
 			"content-type": "text/plain",
 			"timezone":     now.Location().String(),
@@ -190,7 +221,6 @@ func (s *Server) handleTime(ctx context.Context, req *pb.UpstreamRequest) (*pb.U
 	}, nil
 }
 
-// 用户登录处理 + 会话管理
 func (s *Server) handleLogin(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	if req.Openid == "" {
 		return &pb.UpstreamResponse{
@@ -200,6 +230,7 @@ func (s *Server) handleLogin(ctx context.Context, req *pb.UpstreamRequest) (*pb.
 		}, nil
 	}
 
+	// 记录用户登录
 	s.usersMutex.Lock()
 	s.loggedInUsers[req.Openid] = &UserSession{
 		OpenID:     req.Openid,
@@ -216,7 +247,7 @@ func (s *Server) handleLogin(ctx context.Context, req *pb.UpstreamRequest) (*pb.
 	}
 
 	message := fmt.Sprintf("你好, %s! 欢迎登录网关服务器。当前在线用户：%d人", name, userCount)
-	log.Printf("用户登录成功 - OpenID: %s, 在线用户数: %d", req.Openid, userCount)
+	log.Printf("用户登录成功 - OpenID: %s, SessionID: %s, 在线用户数: %d", req.Openid, req.SessionId, userCount)
 
 	return &pb.UpstreamResponse{
 		Code:    200,
@@ -225,13 +256,12 @@ func (s *Server) handleLogin(ctx context.Context, req *pb.UpstreamRequest) (*pb.
 		Headers: map[string]string{
 			"content-type": "text/plain",
 			"language":     "zh-CN",
-			"gid":          req.Openid,
-			"zone":         "1",
+			"gid":          req.Openid, // 使用OpenID作为GID
+			"zone":         "1",        // 示例Zone
 		},
 	}, nil
 }
 
-// 处理登出请求
 func (s *Server) handleLogout(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	if req.Openid == "" {
 		return &pb.UpstreamResponse{
@@ -260,7 +290,6 @@ func (s *Server) handleLogout(ctx context.Context, req *pb.UpstreamRequest) (*pb
 	}, nil
 }
 
-// 处理用户列表查询
 func (s *Server) handleUserList(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	s.usersMutex.RLock()
 	userCount := len(s.loggedInUsers)
@@ -292,7 +321,6 @@ func (s *Server) handleUserList(ctx context.Context, req *pb.UpstreamRequest) (*
 	}, nil
 }
 
-// 处理计算请求
 func (s *Server) handleCalculate(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	operation := req.Params["operation"]
 	aStr := req.Params["a"]
@@ -369,7 +397,6 @@ func (s *Server) handleCalculate(ctx context.Context, req *pb.UpstreamRequest) (
 	}, nil
 }
 
-// 处理状态查询请求
 func (s *Server) handleStatus(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	s.connMutex.RLock()
 	connCount := s.activeConnections
@@ -403,7 +430,6 @@ func (s *Server) handleStatus(ctx context.Context, req *pb.UpstreamRequest) (*pb
 	}, nil
 }
 
-// 处理广播命令
 func (s *Server) handleBroadcastCommand(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	message := req.Params["message"]
 	if message == "" {
@@ -426,28 +452,33 @@ func (s *Server) handleBroadcastCommand(ctx context.Context, req *pb.UpstreamReq
 	}, nil
 }
 
-// 消息时序测试 - Notify在Response之前下发
 func (s *Server) handleBeforeCommand(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	message := req.Params["message"]
 	if message == "" {
 		message = "测试notify在response之前"
 	}
 
+	// 发送notify消息（在response之前）
 	if s.unicastClient != nil && req.Openid != "" {
 		go func() {
 			pushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+
 			notifyContent := fmt.Sprintf("【NOTIFY BEFORE】%s - 时间: %s", message, time.Now().Format("15:04:05.000"))
 			err := s.unicastClient.PushToOpenIDWithSyncHint(pushCtx, req.Openid, "before_test",
 				"Notify Before Response", notifyContent, []byte("notify_before_data"),
 				pb.NotifySyncHint_NSH_BEFORE_RESPONSE, req.ClientSeqId)
 			if err != nil {
 				log.Printf("Before notify推送失败: %v", err)
+			} else {
+				log.Printf("Before notify推送成功 - OpenID: %s, 消息: %s", req.Openid, notifyContent)
 			}
 		}()
 	}
 
+	// 模拟处理延迟
 	time.Sleep(100 * time.Millisecond)
+
 	responseMsg := fmt.Sprintf("【RESPONSE】%s - 处理完成时间: %s", message, time.Now().Format("15:04:05.000"))
 
 	return &pb.UpstreamResponse{
@@ -462,29 +493,35 @@ func (s *Server) handleBeforeCommand(ctx context.Context, req *pb.UpstreamReques
 	}, nil
 }
 
-// 消息时序测试 - Notify在Response之后下发
 func (s *Server) handleAfterCommand(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	message := req.Params["message"]
 	if message == "" {
 		message = "测试notify在response之后"
 	}
 
+	// 发送notify消息（在response之后）
 	if s.unicastClient != nil && req.Openid != "" {
 		go func() {
-			//time.Sleep(50 * time.Millisecond)
+			// 稍微延迟一下确保response先返回
+
 			pushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
+
 			notifyContent := fmt.Sprintf("【NOTIFY AFTER】%s - 时间: %s", message, time.Now().Format("15:04:05.000"))
 			err := s.unicastClient.PushToOpenIDWithSyncHint(pushCtx, req.Openid, "after_test",
 				"Notify After Response", notifyContent, []byte("notify_after_data"),
 				pb.NotifySyncHint_NSH_AFTER_RESPONSE, req.ClientSeqId)
 			if err != nil {
 				log.Printf("After notify推送失败: %v", err)
+			} else {
+				log.Printf("After notify推送成功 - OpenID: %s, 消息: %s", req.Openid, notifyContent)
 			}
 		}()
 	}
 
-	time.Sleep(10 * time.Millisecond)
+	// 模拟处理延迟
+	time.Sleep(100 * time.Millisecond)
+
 	responseMsg := fmt.Sprintf("【RESPONSE】%s - 处理完成时间: %s", message, time.Now().Format("15:04:05.000"))
 
 	return &pb.UpstreamResponse{
@@ -499,7 +536,6 @@ func (s *Server) handleAfterCommand(ctx context.Context, req *pb.UpstreamRequest
 	}, nil
 }
 
-// 处理默认请求
 func (s *Server) handleDefault(ctx context.Context, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	message := fmt.Sprintf("未知操作: %s\n可用操作: echo, time, hello, calculate, status", req.Action)
 
@@ -513,34 +549,38 @@ func (s *Server) handleDefault(ctx context.Context, req *pb.UpstreamRequest) (*p
 	}, nil
 }
 
-// gRPC请求拦截器 - 连接统计 + 性能监控
 func (s *Server) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	// 增加活跃连接数
 	s.connMutex.Lock()
 	s.activeConnections++
 	current := s.activeConnections
 	s.connMutex.Unlock()
 
+	log.Printf("处理gRPC请求: %s, 当前活跃连接: %d", info.FullMethod, current)
+
+	// 处理请求
 	start := time.Now()
 	resp, err := handler(ctx, req)
 	duration := time.Since(start)
 
+	// 减少活跃连接数
 	s.connMutex.Lock()
 	s.activeConnections--
 	current = s.activeConnections
 	s.connMutex.Unlock()
 
+	// 记录请求日志
 	status := "成功"
 	if err != nil {
 		status = fmt.Sprintf("失败: %v", err)
 	}
 
-	log.Printf("gRPC请求: %s, 状态: %s, 耗时: %v, 连接: %d",
+	log.Printf("gRPC请求完成: %s, 状态: %s, 耗时: %v, 剩余连接: %d",
 		info.FullMethod, status, duration, current)
 
 	return resp, err
 }
 
-// gRPC流式拦截器，用于处理推送连接
 func (s *Server) streamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	startTime := time.Now()
 
@@ -574,11 +614,12 @@ func (s *Server) streamInterceptor(srv interface{}, stream grpc.ServerStream, in
 	return err
 }
 
-// 定时广播任务 - 每30秒向所有在线用户广播
 func (s *Server) broadcastRoutine() {
 	defer s.wg.Done()
-	ticker := time.NewTicker(30 * time.Second)
+
+	ticker := time.NewTicker(30 * time.Second) // 每30秒广播一次
 	defer ticker.Stop()
+
 	broadcastCount := 0
 
 	for {
@@ -590,19 +631,24 @@ func (s *Server) broadcastRoutine() {
 			userCount := len(s.loggedInUsers)
 			s.usersMutex.RUnlock()
 
+			// 只有在有在线用户时才广播
 			if userCount > 0 {
 				broadcastCount++
-				message := fmt.Sprintf("定时广播 #%d - 时间: %s, 在线: %d人",
-					broadcastCount, time.Now().Format("2006-01-02 15:04:05"), userCount)
-				actualUserCount := s.sendBroadcastMessage(message, []byte(message))
-				log.Printf("定时广播完成 #%d - 目标: %d, 实际: %d",
+				message := fmt.Sprintf("定时广播消息 #%d - 当前时间: %s, 在线用户: %d人",
+					broadcastCount,
+					time.Now().Format("2006-01-02 15:04:05"),
+					userCount)
+
+				data := []byte(message)
+				actualUserCount := s.sendBroadcastMessage(message, data)
+
+				log.Printf("定时广播完成 #%d - 目标用户: %d, 实际发送: %d",
 					broadcastCount, userCount, actualUserCount)
 			}
 		}
 	}
 }
 
-// 发送广播消息给所有在线用户
 func (s *Server) sendBroadcastMessage(message string, data []byte) int {
 	if s.unicastClient == nil {
 		log.Printf("广播失败：单播客户端未初始化")
@@ -635,7 +681,6 @@ func (s *Server) sendBroadcastMessage(message string, data []byte) int {
 	return len(users)
 }
 
-// 对外广播接口
 func (s *Server) SendBroadcast(message string, data []byte, headers map[string]string) error {
 	userCount := s.sendBroadcastMessage(message, data)
 	if userCount > 0 {
@@ -644,7 +689,6 @@ func (s *Server) SendBroadcast(message string, data []byte, headers map[string]s
 	return fmt.Errorf("广播发送失败或没有在线用户")
 }
 
-// 获取广播统计
 func (s *Server) GetBroadcastStats() map[string]interface{} {
 	s.usersMutex.RLock()
 	userCount := len(s.loggedInUsers)
@@ -663,7 +707,6 @@ func (s *Server) GetBroadcastStats() map[string]interface{} {
 	}
 }
 
-// 获取已登录用户列表
 func (s *Server) GetLoggedInUsers() []*UserSession {
 	s.usersMutex.RLock()
 	defer s.usersMutex.RUnlock()
@@ -680,7 +723,6 @@ func (s *Server) GetLoggedInUsers() []*UserSession {
 	return users
 }
 
-// 更新用户活动时间
 func (s *Server) UpdateUserActivity(openid string) {
 	s.usersMutex.Lock()
 	defer s.usersMutex.Unlock()
@@ -688,37 +730,4 @@ func (s *Server) UpdateUserActivity(openid string) {
 	if user, exists := s.loggedInUsers[openid]; exists {
 		user.LastActive = time.Now()
 	}
-}
-
-// 自动注册到Gateway - Zone路由配置
-func (s *Server) registerToGateway() error {
-	log.Printf("注册到Gateway: %s, Zone: %s, Address: %s", s.gatewayAddr, s.zoneID, s.addr)
-
-	conn, err := grpc.Dial(s.gatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return fmt.Errorf("连接Gateway失败: %w", err)
-	}
-	defer conn.Close()
-
-	client := pb.NewGatewayServiceClient(conn)
-	req := &pb.UpstreamRegisterRequest{
-		Address:     s.addr,
-		ZoneId:      s.zoneID,
-		ServiceName: fmt.Sprintf("upstream-zone-%s", s.zoneID),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	resp, err := client.RegisterUpstream(ctx, req)
-	if err != nil {
-		return fmt.Errorf("注册请求失败: %w", err)
-	}
-
-	if !resp.Success {
-		return fmt.Errorf("注册被拒绝: %s (错误码: %s)", resp.Message, resp.ErrorCode)
-	}
-
-	log.Printf("成功注册到Gateway - Zone: %s, Address: %s", s.zoneID, s.addr)
-	return nil
 }

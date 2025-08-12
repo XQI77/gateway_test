@@ -1,135 +1,176 @@
-// Package upstream 提供基于大区的上游服务管理
+// Package upstream 提供多上游服务管理
 package upstream
 
 import (
 	"fmt"
 	"sync"
-	"time"
-
-	pb "gatesvr/proto"
 )
 
-// 上游服务实例
-type UpstreamInstance struct {
-	Address    string                   `json:"address"`    // 服务地址 "ip:port"
-	ZoneID     string                   `json:"zone_id"`    // 所属大区 "001"-"006"
-	Client     pb.UpstreamServiceClient `json:"-"`          // gRPC客户端
-	Registered time.Time                `json:"registered"` // 注册时间
-	LastSeen   time.Time                `json:"last_seen"`  // 最后活跃时间
+type ServiceType string
+
+const (
+	ServiceTypeHello    ServiceType = "hello"
+	ServiceTypeBusiness ServiceType = "business"
+	ServiceTypeZone     ServiceType = "zone"
+)
+
+type ServiceInfo struct {
+	Type      ServiceType `json:"type"`
+	Addresses []string    `json:"addresses"`
+	Enabled   bool        `json:"enabled"`
 }
 
-// 基于大区的上游服务管理器
-type ZoneBasedUpstreamServices struct {
-	zoneInstances map[string]*UpstreamInstance // zoneID -> instance
-	mu            sync.RWMutex
+type UpstreamServices struct {
+	services map[ServiceType]*ServiceInfo
+	mu       sync.RWMutex
 }
 
-func NewZoneBasedUpstreamServices() *ZoneBasedUpstreamServices {
-	return &ZoneBasedUpstreamServices{
-		zoneInstances: make(map[string]*UpstreamInstance),
+func NewUpstreamServices() *UpstreamServices {
+	return &UpstreamServices{
+		services: make(map[ServiceType]*ServiceInfo),
 	}
 }
 
-func (zs *ZoneBasedUpstreamServices) RegisterInstance(address, zoneID string, client pb.UpstreamServiceClient) error {
-	zs.mu.Lock()
-	defer zs.mu.Unlock()
+func (us *UpstreamServices) AddService(serviceType ServiceType, addresses []string) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
 
-	// 验证zoneID格式
-	if len(zoneID) != 3 {
-		return fmt.Errorf("invalid zone_id format: %s, expected 3-digit format", zoneID)
+	us.services[serviceType] = &ServiceInfo{
+		Type:      serviceType,
+		Addresses: addresses,
+		Enabled:   true,
 	}
-
-	now := time.Now()
-	zs.zoneInstances[zoneID] = &UpstreamInstance{
-		Address:    address,
-		ZoneID:     zoneID,
-		Client:     client,
-		Registered: now,
-		LastSeen:   now,
-	}
-
-	return nil
 }
 
-func (zs *ZoneBasedUpstreamServices) GetInstanceByZone(zoneID string) (*UpstreamInstance, error) {
-	zs.mu.RLock()
-	defer zs.mu.RUnlock()
+func (us *UpstreamServices) GetService(serviceType ServiceType) (*ServiceInfo, error) {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
 
-	instance, exists := zs.zoneInstances[zoneID]
+	service, exists := us.services[serviceType]
 	if !exists {
-		return nil, fmt.Errorf("zone %s no upstream service registered", zoneID)
+		return nil, fmt.Errorf("服务类型 %s 不存在", serviceType)
 	}
 
-	return instance, nil
+	if !service.Enabled {
+		return nil, fmt.Errorf("服务类型 %s 已禁用", serviceType)
+	}
+
+	return service, nil
 }
 
-func (zs *ZoneBasedUpstreamServices) GetAllInstances() map[string]*UpstreamInstance {
-	zs.mu.RLock()
-	defer zs.mu.RUnlock()
+func (us *UpstreamServices) GetAllServices() map[ServiceType]*ServiceInfo {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
 
-	result := make(map[string]*UpstreamInstance)
-	for zoneID, instance := range zs.zoneInstances {
-		result[zoneID] = &UpstreamInstance{
-			Address:    instance.Address,
-			ZoneID:     instance.ZoneID,
-			Client:     instance.Client,
-			Registered: instance.Registered,
-			LastSeen:   instance.LastSeen,
+	result := make(map[ServiceType]*ServiceInfo)
+	for k, v := range us.services {
+		result[k] = &ServiceInfo{
+			Type:      v.Type,
+			Addresses: make([]string, len(v.Addresses)),
+			Enabled:   v.Enabled,
 		}
+		copy(result[k].Addresses, v.Addresses)
 	}
 
 	return result
 }
 
-func (zs *ZoneBasedUpstreamServices) UpdateInstanceLastSeen(zoneID string) {
-	zs.mu.Lock()
-	defer zs.mu.Unlock()
+func (us *UpstreamServices) UpdateService(serviceType ServiceType, addresses []string) error {
+	us.mu.Lock()
+	defer us.mu.Unlock()
 
-	if instance, exists := zs.zoneInstances[zoneID]; exists {
-		instance.LastSeen = time.Now()
+	service, exists := us.services[serviceType]
+	if !exists {
+		return fmt.Errorf("服务类型 %s 不存在", serviceType)
 	}
+
+	service.Addresses = addresses
+	return nil
 }
 
-func (zs *ZoneBasedUpstreamServices) RemoveInstance(zoneID string) {
-	zs.mu.Lock()
-	defer zs.mu.Unlock()
+func (us *UpstreamServices) EnableService(serviceType ServiceType) error {
+	us.mu.Lock()
+	defer us.mu.Unlock()
 
-	delete(zs.zoneInstances, zoneID)
+	service, exists := us.services[serviceType]
+	if !exists {
+		return fmt.Errorf("服务类型 %s 不存在", serviceType)
+	}
+
+	service.Enabled = true
+	return nil
 }
 
-func (zs *ZoneBasedUpstreamServices) GetInstanceCount() int {
-	zs.mu.RLock()
-	defer zs.mu.RUnlock()
+func (us *UpstreamServices) DisableService(serviceType ServiceType) error {
+	us.mu.Lock()
+	defer us.mu.Unlock()
 
-	return len(zs.zoneInstances)
+	service, exists := us.services[serviceType]
+	if !exists {
+		return fmt.Errorf("服务类型 %s 不存在", serviceType)
+	}
+
+	service.Enabled = false
+	return nil
 }
 
-func (zs *ZoneBasedUpstreamServices) IsZoneAvailable(zoneID string) bool {
-	zs.mu.RLock()
-	defer zs.mu.RUnlock()
+func (us *UpstreamServices) RemoveService(serviceType ServiceType) {
+	us.mu.Lock()
+	defer us.mu.Unlock()
 
-	_, exists := zs.zoneInstances[zoneID]
-	return exists
+	delete(us.services, serviceType)
 }
 
-func (zs *ZoneBasedUpstreamServices) GetStats() map[string]interface{} {
-	zs.mu.RLock()
-	defer zs.mu.RUnlock()
+func (us *UpstreamServices) GetServiceCount() int {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+
+	return len(us.services)
+}
+
+func (us *UpstreamServices) GetEnabledServiceCount() int {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+
+	count := 0
+	for _, service := range us.services {
+		if service.Enabled {
+			count++
+		}
+	}
+	return count
+}
+
+func (us *UpstreamServices) IsServiceAvailable(serviceType ServiceType) bool {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
+
+	service, exists := us.services[serviceType]
+	if !exists {
+		return false
+	}
+
+	return service.Enabled && len(service.Addresses) > 0
+}
+
+func (us *UpstreamServices) GetStats() map[string]interface{} {
+	us.mu.RLock()
+	defer us.mu.RUnlock()
 
 	stats := make(map[string]interface{})
-	instanceStats := make(map[string]interface{})
+	serviceStats := make(map[string]interface{})
 
-	for zoneID, instance := range zs.zoneInstances {
-		instanceStats[zoneID] = map[string]interface{}{
-			"address":    instance.Address,
-			"registered": instance.Registered.Format("2006-01-02 15:04:05"),
-			"last_seen":  instance.LastSeen.Format("2006-01-02 15:04:05"),
+	for serviceType, service := range us.services {
+		serviceStats[string(serviceType)] = map[string]interface{}{
+			"enabled":       service.Enabled,
+			"address_count": len(service.Addresses),
+			"addresses":     service.Addresses,
 		}
 	}
 
-	stats["instances"] = instanceStats
-	stats["total_instances"] = len(zs.zoneInstances)
-	stats["available_zones"] = len(zs.zoneInstances)
+	stats["services"] = serviceStats
+	stats["total_services"] = len(us.services)
+	stats["enabled_services"] = us.GetEnabledServiceCount()
 
 	return stats
 }

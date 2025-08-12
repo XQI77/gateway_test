@@ -3,6 +3,7 @@ package gateway
 import (
 	"crypto/tls"
 	"fmt"
+	"gatesvr/internal/upstream"
 	"gatesvr/pkg/metrics"
 	pb "gatesvr/proto"
 	"log"
@@ -109,14 +110,39 @@ func (s *Server) isRunning() bool {
 	return s.running
 }
 
-// 初始化上游服务连接
 func (s *Server) initUpstreamConnections() error {
-	if s.upstreamRouter == nil {
-		return fmt.Errorf("上游服务路由器未初始化")
+	// 如果没有配置多上游服务，尝试向后兼容模式
+	if s.upstreamServices.GetServiceCount() == 0 && s.config.UpstreamAddr != "" {
+		// 向后兼容：连接单一上游服务
+		log.Printf("上游服务启动失败 ")
+		return nil //（todo不能返回nil）
 	}
-	log.Printf("上游路由器已准备就绪，支持6个zone的OpenID路由")
 
-	log.Printf("已初始化基于OpenID的上游服务路由器")
-	log.Printf("等待上游服务通过gRPC RegisterUpstream调用进行注册...")
+	// 创建上游服务管理器
+	s.upstreamManager = upstream.NewServiceManager(s.upstreamServices)
+
+	// 预连接所有配置的上游服务
+	services := s.upstreamServices.GetAllServices()
+	connectedCount := 0
+
+	for serviceType := range services {
+		if s.upstreamServices.IsServiceAvailable(serviceType) {
+			// 尝试预连接服务（不阻塞启动）
+			go func(st upstream.ServiceType) {
+				if _, err := s.upstreamManager.GetClient(st); err != nil {
+					log.Printf("警告: 预连接上游服务失败 - %s: %v", st, err)
+				} else {
+					log.Printf("预连接上游服务成功 - %s", st)
+				}
+			}(serviceType)
+			connectedCount++
+		}
+	}
+
+	if connectedCount == 0 {
+		return fmt.Errorf("没有可用的上游服务")
+	}
+
+	log.Printf("已初始化上游服务连接管理器 - 配置服务数: %d", connectedCount)
 	return nil
 }

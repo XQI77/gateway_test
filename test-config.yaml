@@ -4,27 +4,16 @@ server:
   grpc_addr: ":8092"          # 修改为8092避免与business上游服务(8082)冲突
   metrics_addr: ":9090"       # 监控指标端口
   
-  # 基于Zone的上游服务配置 - 新版本
-  # 上游服务将通过gRPC RegisterUpstream自动注册
-  # 无需预配置服务地址，支持动态注册和负载均衡
-  
-  # Zone路由说明:
-  # OpenID 10000-99999 分配到6个zone：
-  # Zone 001: 10000-24999 (15000个用户)
-  # Zone 002: 25000-39999 (15000个用户) 
-  # Zone 003: 40000-54999 (15000个用户)
-  # Zone 004: 55000-69999 (15000个用户)
-  # Zone 005: 70000-84999 (15000个用户)
-  # Zone 006: 85000-99999 (15000个用户)
-  
-  # 上游服务启动示例命令：
-  # ./bin/upstream --zone=001 --addr=localhost:9001 --gateway=localhost:8092
-  # ./bin/upstream --zone=002 --addr=localhost:9002 --gateway=localhost:8092
-  # ./bin/upstream --zone=003 --addr=localhost:9003 --gateway=localhost:8092
-  # ./bin/upstream --zone=004 --addr=localhost:9004 --gateway=localhost:8092
-  # ./bin/upstream --zone=005 --addr=localhost:9005 --gateway=localhost:8092
-  # ./bin/upstream --zone=006 --addr=localhost:9006 --gateway=localhost:8092
-  
+  # 多上游服务配置 - 测试用
+  upstream_services:
+    hello:
+      - "localhost:8081"      # Hello服务端口
+    business:
+      - "localhost:8082"      # Business服务端口  
+    zone:
+      - "localhost:8083"      # Zone服务端口
+
+      
   cert_file: "certs/server.crt"
   key_file: "certs/server.key"
   session_timeout: "5m"

@@ -249,10 +249,7 @@ func (s *Session) InitOrderedQueue(maxQueueSize int) {
 	}
 }
 
-// ======= 消息保序机制相关方法 =======
-
 // 将notify消息添加到beforeRspNotifies映射中
-
 func (s *Session) AddNotifyBindBeforeRsp(grid uint32, notify *NotifyBindMsgItem) bool {
 	if s.orderingManager == nil {
 		return false
@@ -261,7 +258,6 @@ func (s *Session) AddNotifyBindBeforeRsp(grid uint32, notify *NotifyBindMsgItem)
 }
 
 // 将notify消息添加到afterRspNotifies映射中
-
 func (s *Session) AddNotifyBindAfterRsp(grid uint32, notify *NotifyBindMsgItem) bool {
 	if s.orderingManager == nil {
 		return false

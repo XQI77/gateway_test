@@ -8,7 +8,6 @@ import (
 	pb "gatesvr/proto"
 )
 
-// 处理upstream服务注册请求
 func (s *Server) RegisterUpstream(ctx context.Context, req *pb.UpstreamRegisterRequest) (*pb.UpstreamRegisterResponse, error) {
 	log.Printf("收到upstream服务注册请求 - Zone: %s, Address: %s, Name: %s",
 		req.ZoneId, req.Address, req.ServiceName)

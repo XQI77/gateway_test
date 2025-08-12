@@ -9,7 +9,6 @@ import (
 	pb "gatesvr/proto"
 )
 
-// 有序消息发送器
 type OrderedMessageSender struct {
 	server       *Server
 	messageCodec *message.MessageCodec
@@ -23,7 +22,6 @@ func NewOrderedMessageSender(server *Server) *OrderedMessageSender {
 	}
 }
 
-// 发送有序消息
 func (oms *OrderedMessageSender) SendOrderedMessage(sess *session.Session, push *pb.ServerPush) error {
 	serverSeq := sess.NewServerSeq()
 	push.SeqId = serverSeq
@@ -77,7 +75,6 @@ func (oms *OrderedMessageSender) sendMessageDirectly(sess *session.Session, orde
 	return nil
 }
 
-// 发送心跳响应
 func (oms *OrderedMessageSender) SendHeartbeatResponse(sess *session.Session, msgID uint32, clientTimestamp int64) error {
 	response := oms.messageCodec.CreateHeartbeatResponse(
 		msgID,
@@ -88,7 +85,6 @@ func (oms *OrderedMessageSender) SendHeartbeatResponse(sess *session.Session, ms
 	return oms.SendOrderedMessage(sess, response)
 }
 
-// 发送业务响应
 func (oms *OrderedMessageSender) SendBusinessResponse(sess *session.Session, msgID uint32, code int32, message string, data []byte, headers map[string]string) error {
 	response := oms.messageCodec.CreateBusinessResponse(
 		msgID,

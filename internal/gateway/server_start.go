@@ -67,7 +67,6 @@ func (s *Server) startHTTPServer() error {
 	return nil
 }
 
-// 启动监控服务器
 func (s *Server) startMetricsServer() error {
 	s.metricsServer = metrics.NewMetricsServer(s.config.MetricsAddr)
 
@@ -104,7 +103,6 @@ func (s *Server) startGRPCServer() error {
 	return nil
 }
 
-// 检查服务器是否在运行
 func (s *Server) isRunning() bool {
 	s.runningMutex.RLock()
 	defer s.runningMutex.RUnlock()

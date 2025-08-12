@@ -168,7 +168,6 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop 停止网关服务器
 func (s *Server) Stop() {
 	log.Printf("正在停止网关服务器...")
 
@@ -245,7 +244,6 @@ func (s *Server) onSessionSync(sessionID string, session *session.Session, event
 	}
 }
 
-// 获取备份统计信息
 func (s *Server) GetBackupStats() map[string]interface{} {
 	if s.backupManager == nil {
 		return map[string]interface{}{

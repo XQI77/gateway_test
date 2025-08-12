@@ -125,7 +125,6 @@ type OverloadProtector struct {
 	mutex sync.RWMutex
 }
 
-// 创建过载保护器
 func NewOverloadProtector(config *OverloadConfig, metricsInstance *metrics.GateServerMetrics) *OverloadProtector {
 	if config == nil {
 		config = DefaultOverloadConfig()
@@ -174,7 +173,6 @@ func (op *OverloadProtector) AllowNewConnection() bool {
 	return true
 }
 
-// 检查是否允许新请求
 func (op *OverloadProtector) AllowNewRequest() bool {
 	if !op.config.Enabled {
 		op.qpsWindow.Add(1) // 仍然统计QPS，即使不启用保护
@@ -234,7 +232,6 @@ func (op *OverloadProtector) AllowUpstreamRequest() bool {
 	return true
 }
 
-// 连接开始时调用
 func (op *OverloadProtector) OnConnectionStart() {
 	current := atomic.AddInt64(&op.currentConnections, 1)
 	if op.metrics != nil {
@@ -262,7 +259,6 @@ func (op *OverloadProtector) OnUpstreamStart() {
 	}
 }
 
-// 上游请求结束时调用
 func (op *OverloadProtector) OnUpstreamEnd() {
 	current := atomic.AddInt64(&op.upstreamActive, -1)
 	if current < 0 {
@@ -291,7 +287,6 @@ func (op *OverloadProtector) GetStats() map[string]interface{} {
 	}
 }
 
-// 检查连接是否过载
 func (op *OverloadProtector) IsConnectionOverloaded() bool {
 	if !op.config.Enabled {
 		return false
@@ -317,22 +312,18 @@ func (op *OverloadProtector) IsUpstreamOverloaded() bool {
 	return current >= int64(op.config.MaxUpstreamConcurrent)
 }
 
-// 获取当前连接数
 func (op *OverloadProtector) GetCurrentConnections() int64 {
 	return atomic.LoadInt64(&op.currentConnections)
 }
 
-// 获取当前QPS
 func (op *OverloadProtector) GetCurrentQPS() float64 {
 	return op.qpsWindow.Rate()
 }
 
-// 获取当前上游活跃请求数
 func (op *OverloadProtector) GetUpstreamActive() int64 {
 	return atomic.LoadInt64(&op.upstreamActive)
 }
 
-// 重置统计数据
 func (op *OverloadProtector) Reset() {
 	atomic.StoreInt64(&op.currentConnections, 0)
 	atomic.StoreInt64(&op.upstreamActive, 0)
@@ -343,7 +334,6 @@ func (op *OverloadProtector) Reset() {
 	op.startTime = time.Now()
 }
 
-// 动态启用/禁用保护
 func (op *OverloadProtector) SetEnabled(enabled bool) {
 	op.mutex.Lock()
 	defer op.mutex.Unlock()

@@ -59,7 +59,6 @@ func (s *Server) handleUnicastToSessionWithOrdering(req *pb.UnicastPushRequest) 
 	return s.processNotifyMessage(session, req)
 }
 
-// OpenID的单播推送
 func (s *Server) handleUnicastToOpenIDWithOrdering(req *pb.UnicastPushRequest) error {
 	session, exists := s.sessionManager.GetSessionByOpenID(req.TargetId)
 	if !exists {
@@ -77,7 +76,6 @@ func (s *Server) handleUnicastToOpenIDWithOrdering(req *pb.UnicastPushRequest) e
 	return s.processNotifyMessage(session, req)
 }
 
-// 实现广播推送到所有在线客户端
 func (s *Server) BroadcastToClients(ctx context.Context, req *pb.BroadcastRequest) (*pb.BroadcastResponse, error) {
 	log.Printf("收到广播推送请求 - 消息类型: %s, 标题: %s", req.MsgType, req.Title)
 
@@ -110,7 +108,6 @@ func (s *Server) BroadcastToClients(ctx context.Context, req *pb.BroadcastReques
 	}, nil
 }
 
-// 发送广播消息到指定会话
 func (s *Server) sendBroadcastMessage(session *session.Session, req *pb.BroadcastRequest) error {
 	if session.IsClosed() {
 		return fmt.Errorf("会话已关闭: %s", session.ID)
@@ -135,7 +132,6 @@ func (s *Server) sendBroadcastMessage(session *session.Session, req *pb.Broadcas
 	return nil
 }
 
-// 在gateway层处理notify消息，统一管理序列号
 func (s *Server) processNotifyMessage(session *session.Session, req *pb.UnicastPushRequest) error {
 	switch req.SyncHint {
 	case pb.NotifySyncHint_NSH_BEFORE_RESPONSE:

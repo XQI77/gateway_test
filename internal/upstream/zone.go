@@ -6,13 +6,13 @@ import (
 	"regexp"
 )
 
-// ValidateZoneID 验证ZoneID格式是否有效 (001-006)
+// 验证ZoneID格式是否有效 (001-006)
 func ValidateZoneID(zoneID string) bool {
 	matched, _ := regexp.MatchString(`^00[1-6]$`, zoneID)
 	return matched
 }
 
-// GetZoneByOpenID 根据OpenID计算对应的ZoneID
+// 根据OpenID计算对应的ZoneID
 func GetZoneByOpenID(openID string) (string, error) {
 	if openID == "" {
 		return "", fmt.Errorf("openID cannot be empty")

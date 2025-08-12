@@ -185,7 +185,6 @@ func (m *Manager) Stop() {
 	})
 }
 
-// cleanupExpiredSessions 清理过期会话
 func (m *Manager) cleanupExpiredSessions(ctx context.Context) {
 	defer m.wg.Done()
 
@@ -204,7 +203,6 @@ func (m *Manager) cleanupExpiredSessions(ctx context.Context) {
 	}
 }
 
-// removeExpiredSessions 移除过期会话
 func (m *Manager) removeExpiredSessions() {
 	expiredSessions := make([]string, 0)
 
@@ -229,17 +227,15 @@ func (m *Manager) removeExpiredSessions() {
 	}
 }
 
-// AckMessagesUpTo 确认到指定序列号为止的所有消息（批量ACK）
+// 批量ACK
 func (m *Manager) AckMessagesUpTo(sessionID string, ackSeqID uint64) int {
 	session, exists := m.GetSession(sessionID)
 	if !exists {
 		return 0
 	}
 
-	// 更新会话的ACK序列号
 	session.UpdateAckServerSeq(ackSeqID)
 
-	// 使用OrderedMessageQueue的批量确认功能
 	orderedQueue := session.GetOrderedQueue()
 	if orderedQueue == nil {
 		return 0
@@ -248,7 +244,6 @@ func (m *Manager) AckMessagesUpTo(sessionID string, ackSeqID uint64) int {
 	return orderedQueue.AckMessagesUpTo(ackSeqID)
 }
 
-// ActivateSession 激活会话（处理登录成功后的会话激活）
 func (m *Manager) ActivateSession(sessionID string, zone int64) error {
 	value, exists := m.sessions.Load(sessionID)
 	if !exists {
@@ -266,7 +261,6 @@ func (m *Manager) ActivateSession(sessionID string, zone int64) error {
 	return nil
 }
 
-// writeMessageToSession 向会话写入消息数据
 func (m *Manager) writeMessageToSession(session *Session, data []byte) error {
 	if session.IsClosed() {
 		return fmt.Errorf("会话已关闭")
@@ -276,7 +270,6 @@ func (m *Manager) writeMessageToSession(session *Session, data []byte) error {
 	return err
 }
 
-// ValidateClientSequence 验证客户端消息序列号
 func (m *Manager) ValidateClientSequence(sessionID string, clientSeq uint64) bool {
 	session, exists := m.GetSession(sessionID)
 	if !exists {
@@ -286,7 +279,6 @@ func (m *Manager) ValidateClientSequence(sessionID string, clientSeq uint64) boo
 	return session.ValidateClientSeq(clientSeq)
 }
 
-// GetExpectedClientSequence 获取期待的下一个客户端序列号
 func (m *Manager) GetExpectedClientSequence(sessionID string) uint64 {
 	session, exists := m.GetSession(sessionID)
 	if !exists {

@@ -41,7 +41,7 @@ message UpstreamRequest {
   map<string, string> params = 4; // 参数
   bytes data = 5;              // 原始数据
   map<string, string> headers = 6; // 请求头
-  uint64 client_seq_id = 7;    // 客户端序列号, 同时作为请求的唯一标识 (grid)
+  uint64 client_seq_id = 7;    // 客户端序列号, 同时作为请求的唯一标识
 }
 
 // 上游响应消息
@@ -61,12 +61,12 @@ message StatusRequest {
 // 状态响应消息
 message StatusResponse {
   string status = 1;           // 服务状态
-  int64 uptime = 2;           // 运行时间（秒）
+  int64 uptime = 2;           // 运行时间
   int32 active_connections = 3; // 活跃连接数
   map<string, string> metadata = 4; // 额外元数据
 }
 
-// 单播推送请求 (Notify 消息)
+// 单播推送请求 Notify 消息
 message UnicastPushRequest {
   string target_type = 1;      // 目标类型: session, gid, openid
   string target_id = 2;        // 目标标识符
@@ -83,37 +83,36 @@ message UnicastPushRequest {
 message UnicastPushResponse {
   bool success = 1;            // 是否成功
   string message = 2;          // 响应消息
-  string error_code = 3;       // 错误代码（如果有）
+  string error_code = 3;       //
 }
 
-// ADDED FOR BROADCAST: 广播请求消息
-// 注意：它不包含任何目标信息，因为它是发给所有人的
+// 广播请求消息
 message BroadcastRequest {
   string msg_type = 1;         // 消息类型
   string title = 2;            // 推送标题
   string content = 3;          // 推送内容
-  bytes data = 4;              // 额外数据
-  map<string, string> metadata = 5; // 元数据
+  bytes data = 4;
+  map<string, string> metadata = 5;
 }
 
-// ADDED FOR BROADCAST: 广播响应消息
+// 广播响应消息
 message BroadcastResponse {
   int32 sent_count = 1;      // 成功下发的客户端数量
-  string message = 2;        // 响应消息，例如 "Broadcast initiated"
+  string message = 2;
 }
 
 // Upstream服务注册请求
 message UpstreamRegisterRequest {
   string address = 1;        // upstream服务地址 "ip:port"
   string zone_id = 2;        // 大区ID "001"-"006"
-  string service_name = 3;   // 服务名称（可选）
+  string service_name = 3;
 }
 
 // Upstream服务注册响应
 message UpstreamRegisterResponse {
   bool success = 1;          // 是否注册成功
   string message = 2;        // 响应消息
-  string error_code = 3;     // 错误代码（如果有）
+  string error_code = 3;     // 错误代码
 }
 
 // 单播目标

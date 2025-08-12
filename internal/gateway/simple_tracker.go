@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// SimpleTracker 简化的性能跟踪器（替代复杂的PerformanceTracker）
 type SimpleTracker struct {
 	startTime         time.Time
 	totalConnections  int64
@@ -15,14 +14,13 @@ type SimpleTracker struct {
 	totalRequests     int64
 	totalErrors       int64
 
-	// 轻量级QPS计算 - 使用计数器而非时间戳数组
+	// 轻量级QPS计算
 	lastQPSTime   time.Time // 上次QPS计算时间
 	lastTotalReqs int64     // 上次QPS计算时的总请求数
 	recentQPS     float64   // 最近的QPS值
 	qpsMutex      sync.RWMutex
 }
 
-// NewSimpleTracker 创建简化的性能跟踪器
 func NewSimpleTracker() *SimpleTracker {
 	now := time.Now()
 	return &SimpleTracker{
@@ -33,28 +31,23 @@ func NewSimpleTracker() *SimpleTracker {
 	}
 }
 
-// RecordConnection 记录新连接
 func (st *SimpleTracker) RecordConnection() {
 	atomic.AddInt64(&st.totalConnections, 1)
 	atomic.AddInt64(&st.activeConnections, 1)
 }
 
-// RecordDisconnection 记录连接断开
 func (st *SimpleTracker) RecordDisconnection() {
 	atomic.AddInt64(&st.activeConnections, -1)
 }
 
-// RecordRequest 记录请求
 func (st *SimpleTracker) RecordRequest() {
 	atomic.AddInt64(&st.totalRequests, 1)
 }
 
-// RecordError 记录错误
 func (st *SimpleTracker) RecordError() {
 	atomic.AddInt64(&st.totalErrors, 1)
 }
 
-// GetBasicStats 获取基础统计信息
 func (st *SimpleTracker) GetBasicStats() map[string]interface{} {
 	uptime := time.Since(st.startTime)
 	totalReqs := atomic.LoadInt64(&st.totalRequests)
@@ -62,7 +55,6 @@ func (st *SimpleTracker) GetBasicStats() map[string]interface{} {
 	activeConns := atomic.LoadInt64(&st.activeConnections)
 	totalConns := atomic.LoadInt64(&st.totalConnections)
 
-	// 计算瞬时QPS（轻量级方法）
 	instantQPS := st.calculateLightweightQPS()
 
 	successRate := float64(totalReqs-totalErrs) / float64(totalReqs) * 100
@@ -81,7 +73,7 @@ func (st *SimpleTracker) GetBasicStats() map[string]interface{} {
 	}
 }
 
-// calculateLightweightQPS 轻量级QPS计算 - 每5秒更新一次
+// 轻量级QPS计算
 func (st *SimpleTracker) calculateLightweightQPS() float64 {
 	now := time.Now()
 	currentTotalReqs := atomic.LoadInt64(&st.totalRequests)
@@ -116,7 +108,6 @@ func (st *SimpleTracker) calculateLightweightQPS() float64 {
 	return st.recentQPS
 }
 
-// GetStats 兼容原有接口，返回基础统计
 func (st *SimpleTracker) GetStats() map[string]interface{} {
 	return st.GetBasicStats()
 }

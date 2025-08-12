@@ -25,7 +25,6 @@ func (s *Server) PushToSession(sessionID string, msgType string, title, content 
 	return nil
 }
 
-// 根据OpenID单播推送消息
 func (s *Server) PushToOpenID(openID string, msgType string, title, content string, data []byte) error {
 	session, exists := s.sessionManager.GetSessionByOpenID(openID)
 	if !exists {

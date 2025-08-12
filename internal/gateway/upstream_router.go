@@ -8,7 +8,6 @@ import (
 	"log"
 )
 
-// 根据OpenID调用对应的上游服务
 func (s *Server) callUpstreamService(ctx context.Context, openID string, req *pb.UpstreamRequest) (*pb.UpstreamResponse, error) {
 	// 验证OpenID
 	if openID == "" {
@@ -52,7 +51,6 @@ func (s *Server) getUpstreamServiceInfo(openID string) string {
 	return fmt.Sprintf("Zone %s: %s", zoneID, instance.Address)
 }
 
-// 注册上游服务实例
 func (s *Server) registerUpstreamService(address, zoneID string) error {
 	if s.upstreamRouter == nil {
 		return fmt.Errorf("upstream router not initialized")
@@ -78,7 +76,6 @@ func (s *Server) getUpstreamStats() map[string]interface{} {
 	return s.upstreamRouter.GetStats()
 }
 
-// 验证上游路由配置
 func (s *Server) validateUpstreamRouting() error {
 	if s.upstreamRouter == nil {
 		return fmt.Errorf("upstream router not initialized")

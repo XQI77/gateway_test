@@ -9,29 +9,27 @@ import (
 	pb "gatesvr/proto"
 )
 
-// UpstreamInstance 上游服务实例
+// 上游服务实例
 type UpstreamInstance struct {
-	Address    string                    `json:"address"`    // 服务地址 "ip:port"
-	ZoneID     string                    `json:"zone_id"`    // 所属大区 "001"-"006"
-	Client     pb.UpstreamServiceClient  `json:"-"`          // gRPC客户端
-	Registered time.Time                 `json:"registered"` // 注册时间
-	LastSeen   time.Time                 `json:"last_seen"`  // 最后活跃时间
+	Address    string                   `json:"address"`    // 服务地址 "ip:port"
+	ZoneID     string                   `json:"zone_id"`    // 所属大区 "001"-"006"
+	Client     pb.UpstreamServiceClient `json:"-"`          // gRPC客户端
+	Registered time.Time                `json:"registered"` // 注册时间
+	LastSeen   time.Time                `json:"last_seen"`  // 最后活跃时间
 }
 
-// ZoneBasedUpstreamServices 基于大区的上游服务管理器
+// 基于大区的上游服务管理器
 type ZoneBasedUpstreamServices struct {
 	zoneInstances map[string]*UpstreamInstance // zoneID -> instance
 	mu            sync.RWMutex
 }
 
-// NewZoneBasedUpstreamServices 创建基于大区的上游服务管理器
 func NewZoneBasedUpstreamServices() *ZoneBasedUpstreamServices {
 	return &ZoneBasedUpstreamServices{
 		zoneInstances: make(map[string]*UpstreamInstance),
 	}
 }
 
-// RegisterInstance 注册上游服务实例
 func (zs *ZoneBasedUpstreamServices) RegisterInstance(address, zoneID string, client pb.UpstreamServiceClient) error {
 	zs.mu.Lock()
 	defer zs.mu.Unlock()
@@ -53,7 +51,6 @@ func (zs *ZoneBasedUpstreamServices) RegisterInstance(address, zoneID string, cl
 	return nil
 }
 
-// GetInstanceByZone 根据大区ID获取上游服务实例
 func (zs *ZoneBasedUpstreamServices) GetInstanceByZone(zoneID string) (*UpstreamInstance, error) {
 	zs.mu.RLock()
 	defer zs.mu.RUnlock()
@@ -66,7 +63,6 @@ func (zs *ZoneBasedUpstreamServices) GetInstanceByZone(zoneID string) (*Upstream
 	return instance, nil
 }
 
-// GetAllInstances 获取所有上游服务实例
 func (zs *ZoneBasedUpstreamServices) GetAllInstances() map[string]*UpstreamInstance {
 	zs.mu.RLock()
 	defer zs.mu.RUnlock()
@@ -85,7 +81,6 @@ func (zs *ZoneBasedUpstreamServices) GetAllInstances() map[string]*UpstreamInsta
 	return result
 }
 
-// UpdateInstanceLastSeen 更新服务实例最后活跃时间
 func (zs *ZoneBasedUpstreamServices) UpdateInstanceLastSeen(zoneID string) {
 	zs.mu.Lock()
 	defer zs.mu.Unlock()
@@ -95,7 +90,6 @@ func (zs *ZoneBasedUpstreamServices) UpdateInstanceLastSeen(zoneID string) {
 	}
 }
 
-// RemoveInstance 移除服务实例
 func (zs *ZoneBasedUpstreamServices) RemoveInstance(zoneID string) {
 	zs.mu.Lock()
 	defer zs.mu.Unlock()
@@ -103,7 +97,6 @@ func (zs *ZoneBasedUpstreamServices) RemoveInstance(zoneID string) {
 	delete(zs.zoneInstances, zoneID)
 }
 
-// GetInstanceCount 获取注册的服务实例数量
 func (zs *ZoneBasedUpstreamServices) GetInstanceCount() int {
 	zs.mu.RLock()
 	defer zs.mu.RUnlock()
@@ -111,7 +104,6 @@ func (zs *ZoneBasedUpstreamServices) GetInstanceCount() int {
 	return len(zs.zoneInstances)
 }
 
-// IsZoneAvailable 检查指定大区是否有可用的服务实例
 func (zs *ZoneBasedUpstreamServices) IsZoneAvailable(zoneID string) bool {
 	zs.mu.RLock()
 	defer zs.mu.RUnlock()
@@ -120,7 +112,6 @@ func (zs *ZoneBasedUpstreamServices) IsZoneAvailable(zoneID string) bool {
 	return exists
 }
 
-// GetStats 获取统计信息
 func (zs *ZoneBasedUpstreamServices) GetStats() map[string]interface{} {
 	zs.mu.RLock()
 	defer zs.mu.RUnlock()

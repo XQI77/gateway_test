@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -51,10 +52,16 @@ type UserSession struct {
 }
 
 func NewServer(addr string) *Server {
+	// 从环境变量读取网关gRPC地址，默认为localhost:8092
+	gatewayAddr := os.Getenv("GATEWAY_GRPC_ADDR")
+	if gatewayAddr == "" {
+		gatewayAddr = "localhost:8092"
+	}
+	
 	return &Server{
 		addr:          addr,
 		startTime:     time.Now(),
-		unicastClient: NewUnicastClient("localhost:8092"), // 网关gRPC地址
+		unicastClient: NewUnicastClient(gatewayAddr), // 网关gRPC地址
 		loggedInUsers: make(map[string]*UserSession),
 		stopCh:        make(chan struct{}),
 	}
